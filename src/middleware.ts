@@ -1,16 +1,21 @@
 /**
  * Middleware Next.js
+ * - Protege rotas do dashboard principal → redireciona para /login
+ * - Protege /admin/dashboard             → redireciona para /admin
  * - Registra visitas de páginas (fire-and-forget para /api/admin/track)
- * - Protege /admin/dashboard redirecionando para /admin se não autenticado
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 
-// Rotas que NÃO devem ser rastreadas
-const SKIP = [
+// Rotas do dashboard que exigem autenticação
+const DASH_PROTECTED = ['/', '/campanhas', '/analise-criativos']
+
+// Prefixos/padrões que NÃO devem ser rastreados
+const SKIP_TRACK = [
   /^\/_next\//,
   /^\/api\//,
   /^\/admin/,
+  /^\/login/,
   /\.ico$/,
   /\.png$/, /\.jpg$/, /\.jpeg$/, /\.webp$/, /\.svg$/,
   /\.woff2?$/, /\.ttf$/,
@@ -22,18 +27,39 @@ const SKIP = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // ── Proteção do painel admin ──────────────────────────────────────────────
+  // ── 1. Proteção do dashboard principal ──────────────────────────────────
+  const isDashRoute =
+    DASH_PROTECTED.includes(pathname) ||
+    pathname.startsWith('/campanhas')  ||
+    pathname.startsWith('/analise-criativos')
+
+  if (isDashRoute) {
+    const token = request.cookies.get('dash_session')?.value
+    if (!token) {
+      const url = new URL('/login', request.url)
+      url.searchParams.set('next', pathname)
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Redireciona /login para / se já estiver autenticado
+  if (pathname === '/login') {
+    const token = request.cookies.get('dash_session')?.value
+    if (token) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+  }
+
+  // ── 2. Proteção do painel admin ─────────────────────────────────────────
   if (pathname.startsWith('/admin/dashboard')) {
     const token = request.cookies.get('admin_session')?.value
     if (!token) {
       return NextResponse.redirect(new URL('/admin', request.url))
     }
-    // A validação real do token é feita pela rota — aqui só checa presença
-    // (validação completa em src/app/admin/dashboard/page.tsx via server component)
   }
 
-  // ── Rastreamento de visitas ──────────────────────────────────────────────
-  if (!SKIP.some(p => p.test(pathname))) {
+  // ── 3. Rastreamento de visitas ──────────────────────────────────────────
+  if (!SKIP_TRACK.some(p => p.test(pathname))) {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
@@ -41,24 +67,23 @@ export function middleware(request: NextRequest) {
 
     const payload = JSON.stringify({
       ip,
-      userAgent:  request.headers.get('user-agent')       ?? '',
-      path:       pathname,
-      referrer:   request.headers.get('referer')          ?? '',
-      language:   request.headers.get('accept-language')  ?? '',
-      timestamp:  new Date().toISOString(),
-      country:    request.headers.get('x-vercel-ip-country') ||
-                  request.headers.get('cf-ipcountry')         ||
-                  request.geo?.country || '',
-      city:       request.headers.get('x-vercel-ip-city') ||
-                  request.geo?.city    || '',
+      userAgent: request.headers.get('user-agent')       ?? '',
+      path:      pathname,
+      referrer:  request.headers.get('referer')          ?? '',
+      language:  request.headers.get('accept-language')  ?? '',
+      timestamp: new Date().toISOString(),
+      country:   request.headers.get('x-vercel-ip-country') ||
+                 request.headers.get('cf-ipcountry')         ||
+                 request.geo?.country || '',
+      city:      request.headers.get('x-vercel-ip-city') ||
+                 request.geo?.city    || '',
     })
 
-    // Fire-and-forget — não bloqueia a resposta
     fetch(new URL('/api/admin/track', request.url).toString(), {
       method:  'POST',
       headers: {
-        'Content-Type':    'application/json',
-        'x-track-secret':  process.env.INTERNAL_TOKEN ?? '',
+        'Content-Type':   'application/json',
+        'x-track-secret': process.env.INTERNAL_TOKEN ?? '',
       },
       body: payload,
     }).catch(() => { /* silencioso */ })
@@ -68,10 +93,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Captura todas as rotas exceto assets estáticos do Next.js
-     */
-    '/((?!_next/static|_next/image).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image).*)'],
 }

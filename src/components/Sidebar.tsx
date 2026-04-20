@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart2, Layers, LayoutDashboard, Settings, Zap,
-  HelpCircle, Sparkles, TrendingUp,
+  HelpCircle, Sparkles, TrendingUp, LogOut,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -54,6 +54,12 @@ const NAV_GROUPS: NavGroup[] = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router   = useRouter()
+
+  async function handleLogout() {
+    await fetch('/api/auth', { method: 'DELETE' })
+    router.replace('/login')
+  }
 
   return (
     /* Clean zinc-gray surface — no gradient, no blur, no atmospheric effects.
@@ -213,6 +219,15 @@ export default function Sidebar() {
             Online
           </span>
         </div>
+
+        {/* Botão de logout */}
+        <button
+          onClick={handleLogout}
+          className="mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-red-400 hover:bg-red-500/8 transition-all"
+        >
+          <LogOut size={13} />
+          Sair
+        </button>
       </div>
     </aside>
   )
