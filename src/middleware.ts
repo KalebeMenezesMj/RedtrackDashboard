@@ -104,9 +104,9 @@ export async function middleware(request: NextRequest) {
       timestamp: new Date().toISOString(),
       country:   request.headers.get('x-vercel-ip-country') ||
                  request.headers.get('cf-ipcountry')         ||
-                 request.geo?.country || '',
+                 (request as unknown as { geo?: { country?: string } }).geo?.country || '',
       city:      request.headers.get('x-vercel-ip-city') ||
-                 request.geo?.city    || '',
+                 (request as unknown as { geo?: { city?: string } }).geo?.city || '',
     })
 
     fetch(new URL('/api/admin/track', request.url).toString(), {

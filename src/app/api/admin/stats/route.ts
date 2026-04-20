@@ -13,6 +13,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Não autorizado.' }, { status: 401 })
   }
 
-  const stats = getStats()
+  const stats = await getStats()
   return NextResponse.json({ ok: true, stats })
 }

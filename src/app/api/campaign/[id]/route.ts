@@ -5,10 +5,10 @@ import type { DateRange, ChartDataPoint } from '@/lib/types'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { searchParams } = req.nextUrl
-  const campaignId = params.id
+  const { id: campaignId } = await params
 
   const dateRange: DateRange = {
     from: searchParams.get('from') ?? formatDate(subDays(new Date(), 30)),
