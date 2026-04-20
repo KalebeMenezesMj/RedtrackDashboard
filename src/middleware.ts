@@ -1,64 +1,94 @@
 /**
- * Middleware Next.js
- * - Protege rotas do dashboard principal → redireciona para /login
- * - Protege /admin/dashboard             → redireciona para /admin
- * - Registra visitas de páginas (fire-and-forget para /api/admin/track)
+ * Middleware Next.js — Edge Runtime
+ * - Protege rotas do dashboard → /login
+ * - Protege /admin/dashboard   → /admin
+ * - Registra visitas (fire-and-forget)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { jwtVerify } from 'jose'
 
-// Rotas do dashboard que exigem autenticação
-const DASH_PROTECTED = ['/', '/campanhas', '/analise-criativos']
+// ---------------------------------------------------------------------------
+// Helpers JWT (inline no middleware para Edge Runtime)
+// ---------------------------------------------------------------------------
 
-// Prefixos/padrões que NÃO devem ser rastreados
+function getSecret() {
+  return new TextEncoder().encode(
+    process.env.SESSION_SECRET ?? 'dev-secret-troque-em-producao'
+  )
+}
+
+async function hasValidJWT(token: string | undefined, role: 'admin' | 'dash'): Promise<boolean> {
+  if (!token) return false
+  try {
+    const { payload } = await jwtVerify(token, getSecret())
+    return payload.role === role
+  } catch {
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Padrões a ignorar no rastreamento
+// ---------------------------------------------------------------------------
+
 const SKIP_TRACK = [
   /^\/_next\//,
   /^\/api\//,
   /^\/admin/,
   /^\/login/,
-  /\.ico$/,
-  /\.png$/, /\.jpg$/, /\.jpeg$/, /\.webp$/, /\.svg$/,
-  /\.woff2?$/, /\.ttf$/,
-  /\.css$/, /\.js$/,
-  /^\/favicon/,
-  /^\/images\//,
+  /\.ico$/, /\.png$/, /\.jpg$/, /\.jpeg$/, /\.webp$/, /\.svg$/,
+  /\.woff2?$/, /\.ttf$/, /\.css$/, /\.js$/,
+  /^\/favicon/, /^\/images\//,
 ]
 
-export function middleware(request: NextRequest) {
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // ── 1. Proteção do dashboard principal ──────────────────────────────────
-  const isDashRoute =
-    DASH_PROTECTED.includes(pathname) ||
-    pathname.startsWith('/campanhas')  ||
+  // ── 1. Proteção do dashboard principal ────────────────────────────────────
+  const isDash =
+    pathname === '/' ||
+    pathname.startsWith('/campanhas') ||
     pathname.startsWith('/analise-criativos')
 
-  if (isDashRoute) {
+  if (isDash) {
     const token = request.cookies.get('dash_session')?.value
-    if (!token) {
+    if (!await hasValidJWT(token, 'dash')) {
       const url = new URL('/login', request.url)
       url.searchParams.set('next', pathname)
       return NextResponse.redirect(url)
     }
   }
 
-  // Redireciona /login para / se já estiver autenticado
+  // Redireciona /login → / se já autenticado
   if (pathname === '/login') {
     const token = request.cookies.get('dash_session')?.value
-    if (token) {
+    if (await hasValidJWT(token, 'dash')) {
       return NextResponse.redirect(new URL('/', request.url))
     }
   }
 
-  // ── 2. Proteção do painel admin ─────────────────────────────────────────
+  // ── 2. Proteção do painel admin ───────────────────────────────────────────
   if (pathname.startsWith('/admin/dashboard')) {
     const token = request.cookies.get('admin_session')?.value
-    if (!token) {
+    if (!await hasValidJWT(token, 'admin')) {
       return NextResponse.redirect(new URL('/admin', request.url))
     }
   }
 
-  // ── 3. Rastreamento de visitas ──────────────────────────────────────────
+  // Redireciona /admin → /admin/dashboard se já autenticado
+  if (pathname === '/admin') {
+    const token = request.cookies.get('admin_session')?.value
+    if (await hasValidJWT(token, 'admin')) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
+  }
+
+  // ── 3. Rastreamento de visitas ────────────────────────────────────────────
   if (!SKIP_TRACK.some(p => p.test(pathname))) {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -67,10 +97,10 @@ export function middleware(request: NextRequest) {
 
     const payload = JSON.stringify({
       ip,
-      userAgent: request.headers.get('user-agent')       ?? '',
+      userAgent: request.headers.get('user-agent')      ?? '',
       path:      pathname,
-      referrer:  request.headers.get('referer')          ?? '',
-      language:  request.headers.get('accept-language')  ?? '',
+      referrer:  request.headers.get('referer')         ?? '',
+      language:  request.headers.get('accept-language') ?? '',
       timestamp: new Date().toISOString(),
       country:   request.headers.get('x-vercel-ip-country') ||
                  request.headers.get('cf-ipcountry')         ||
@@ -86,7 +116,7 @@ export function middleware(request: NextRequest) {
         'x-track-secret': process.env.INTERNAL_TOKEN ?? '',
       },
       body: payload,
-    }).catch(() => { /* silencioso */ })
+    }).catch(() => {})
   }
 
   return NextResponse.next()

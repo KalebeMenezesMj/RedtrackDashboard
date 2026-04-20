@@ -1,56 +1,62 @@
 /**
- * Gerenciamento de sessão — admin e dashboard principal.
- * Tokens armazenados em memória. Expiração: 8 horas.
+ * Sessões via JWT assinado (stateless).
+ * Funciona em Edge Runtime, Node.js e Vercel serverless — sem banco de dados.
+ * Expiração: 8 horas.
  */
 
+import { SignJWT, jwtVerify } from 'jose'
 import crypto from 'crypto'
 
-const EXPIRY_MS = 8 * 60 * 60 * 1000   // 8 horas
-
-// Stores separados para não misturar as duas sessões
-const adminStore = new Map<string, number>()   // token → expiresAt
-const dashStore  = new Map<string, number>()
-
-// ---------------------------------------------------------------------------
-// Funções internas
-// ---------------------------------------------------------------------------
-
-function makeToken(store: Map<string, number>): string {
-  const token = crypto.randomBytes(32).toString('hex')
-  store.set(token, Date.now() + EXPIRY_MS)
-  return token
+// Chave derivada do SESSION_SECRET do ambiente
+function getSecret() {
+  const raw = process.env.SESSION_SECRET ?? 'dev-secret-troque-em-producao'
+  return new TextEncoder().encode(raw)
 }
 
-function checkToken(store: Map<string, number>, token: string | undefined): boolean {
+// ---------------------------------------------------------------------------
+// Criação de token
+// ---------------------------------------------------------------------------
+
+async function makeJWT(role: 'admin' | 'dash'): Promise<string> {
+  return new SignJWT({ role })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('8h')
+    .sign(getSecret())
+}
+
+// ---------------------------------------------------------------------------
+// Validação de token
+// ---------------------------------------------------------------------------
+
+async function verifyJWT(token: string | undefined, role: 'admin' | 'dash'): Promise<boolean> {
   if (!token) return false
-  const exp = store.get(token)
-  if (!exp) return false
-  if (Date.now() > exp) { store.delete(token); return false }
-  return true
-}
-
-function revokeToken(store: Map<string, number>, token: string | undefined) {
-  if (token) store.delete(token)
+  try {
+    const { payload } = await jwtVerify(token, getSecret())
+    return payload.role === role
+  } catch {
+    return false
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Admin (/admin/dashboard)
 // ---------------------------------------------------------------------------
 
-export function createSession():                        string  { return makeToken(adminStore) }
-export function validateSession(t: string | undefined): boolean { return checkToken(adminStore, t) }
-export function destroySession(t: string | undefined)          { revokeToken(adminStore, t) }
+export async function createSession():                              Promise<string>  { return makeJWT('admin') }
+export async function validateSession(t: string | undefined):      Promise<boolean> { return verifyJWT(t, 'admin') }
+export async function destroySession(_t: string | undefined):      Promise<void>    { /* JWT é stateless — invalida pelo cookie */ }
 
 // ---------------------------------------------------------------------------
 // Dashboard principal (/, /campanhas, /analise-criativos)
 // ---------------------------------------------------------------------------
 
-export function createDashSession():                        string  { return makeToken(dashStore) }
-export function validateDashSession(t: string | undefined): boolean { return checkToken(dashStore, t) }
-export function destroyDashSession(t: string | undefined)          { revokeToken(dashStore, t) }
+export async function createDashSession():                         Promise<string>  { return makeJWT('dash') }
+export async function validateDashSession(t: string | undefined):  Promise<boolean> { return verifyJWT(t, 'dash') }
+export async function destroyDashSession(_t: string | undefined):  Promise<void>    { /* JWT é stateless — invalida pelo cookie */ }
 
 // ---------------------------------------------------------------------------
-// Comparação segura contra timing attacks
+// Comparação segura contra timing attacks (continua síncrona)
 // ---------------------------------------------------------------------------
 
 export function safeEqual(a: string, b: string): boolean {
@@ -58,7 +64,6 @@ export function safeEqual(a: string, b: string): boolean {
     const ba = Buffer.from(a)
     const bb = Buffer.from(b)
     if (ba.length !== bb.length) {
-      // executa mesmo assim para manter tempo constante
       crypto.timingSafeEqual(Buffer.alloc(1), Buffer.alloc(1))
       return false
     }

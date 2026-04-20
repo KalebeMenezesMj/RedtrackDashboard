@@ -8,7 +8,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { recordVisit } from '@/lib/analytics'
 
 export async function POST(req: NextRequest) {
-  // Valida token interno
   const secret = req.headers.get('x-track-secret') ?? ''
   if (!secret || secret !== (process.env.INTERNAL_TOKEN ?? '')) {
     return NextResponse.json({ ok: false }, { status: 403 })
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
       city: string
     }
 
-    recordVisit({
+    await recordVisit({
       ip:        body.ip        || '0.0.0.0',
       userAgent: body.userAgent || '',
       path:      body.path      || '/',
