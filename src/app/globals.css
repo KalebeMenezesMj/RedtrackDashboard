@@ -1,0 +1,521 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  BASE
+ *  Resets, typography foundation, and accessibility primitives.
+ * ════════════════════════════════════════════════════════════════════════════ */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Inter's optical-size axis + ss01 (disambiguation) + kern */
+    font-feature-settings: 'ss01', 'cv11', 'kern';
+  }
+
+  body {
+    @apply bg-surface text-slate-100 font-sans;
+    min-height: 100vh;
+    /* No decorative background gradients — clean neutral surface.
+       Atmospheric radials were removed: they implied "space/tech" and
+       conflicted with the professional, tool-first visual direction. */
+  }
+
+  /* ── Focus ring ───────────────────────────────────────────────────────────
+   * Visible on all interactive elements — WCAG 2.1 AA focus-visible.
+   * Uses brand-500 at 55% opacity for sufficient contrast without harshness.
+   * Two-layer ring (background color + brand ring) ensures visibility on
+   * any surface color.
+   * ─────────────────────────────────────────────────────────────────────── */
+  :focus-visible {
+    outline: 2px solid rgba(99,102,241,0.55);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button:focus-visible,
+  a:focus-visible {
+    outline: none;
+    /* Inner ring matches body bg; outer ring is brand — always visible */
+    box-shadow: 0 0 0 2px #09090B, 0 0 0 4px rgba(99,102,241,0.50);
+  }
+
+  /* ── Scrollbar — slim, neutral ────────────────────────────────────────────
+   * Uses zinc-700 thumb for subtlety; brand-500 tint on hover for
+   * interactivity affordance.
+   * ─────────────────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar        { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track  { background: transparent; }
+  ::-webkit-scrollbar-thumb  {
+    background: rgba(63,63,70,0.70);  /* zinc-700 */
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(99,102,241,0.45);  /* brand-500 */
+  }
+
+  /* ── Selection ───────────────────────────────────────────────────────────── */
+  ::selection {
+    background: rgba(99,102,241,0.28);
+    color: #fff;
+  }
+
+  /* ── Form element resets ─────────────────────────────────────────────────── */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.55);
+    cursor: pointer;
+    opacity: 0.65;
+  }
+  input[type='date']::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  COMPONENTS
+ *  Named primitives that compose the design system.
+ *  Rule: no magic color values — use @apply with Tailwind tokens.
+ * ════════════════════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ─── Card primitives ──────────────────────────────────────────────────────
+   * Cards use a single border + subtle shadow for depth. No glassmorphism on
+   * standard cards — blur is reserved for elements that genuinely float over
+   * complex backgrounds (drawer overlays, floating menus).
+   * ─────────────────────────────────────────────────────────────────────── */
+  .card {
+    @apply relative bg-surface-card border border-surface-border rounded-2xl overflow-hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.22);
+  }
+
+  /* Interactive card: border brightens on hover; no vertical lift animation
+   * (lift was removed because it conflicts with sticky content and feels
+   * overly game-like for a professional analytics tool).
+   */
+  .card-interactive {
+    @apply card transition-colors duration-200 cursor-pointer;
+  }
+  .card-interactive:hover {
+    @apply border-surface-muted;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.22), 0 8px 28px rgba(0,0,0,0.30);
+  }
+
+  /* Glass: used only when layering over complex content (e.g., drawer overlay).
+   * Reduced blur from 20px → 12px: still readable, less performance cost.
+   */
+  .card-glass {
+    @apply relative border border-white/6 rounded-2xl;
+    background: rgba(17, 17, 19, 0.90);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.40);
+  }
+
+  .card-elevated {
+    @apply relative bg-surface-card2 border border-surface-border rounded-2xl;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.24), 0 8px 32px rgba(0,0,0,0.32);
+  }
+
+  /* ─── KPI card ─────────────────────────────────────────────────────────────
+   * Select-none prevents accidental text selection on dashboard scan.
+   * Border brightens on hover (same language as card-interactive).
+   * ─────────────────────────────────────────────────────────────────────── */
+  .kpi-card {
+    @apply relative flex flex-col cursor-default p-5
+           rounded-2xl border border-surface-border bg-surface-card
+           transition-colors duration-200 overflow-hidden select-none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.20);
+  }
+  .kpi-card:hover {
+    @apply border-surface-muted;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.22), 0 12px 32px rgba(0,0,0,0.28);
+  }
+
+  /* ─── Buttons ──────────────────────────────────────────────────────────────
+   * All buttons use FLAT color fills — no gradients, no ::before shine layers.
+   * Interaction states: hover lightens, active darkens, disabled grays out.
+   * This matches Linear/Stripe button behavior: clean and predictable.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .btn {
+    @apply relative inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl
+           font-semibold text-sm transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none;
+  }
+
+  /* Primary — solid brand-600, lightens to brand-500 on hover */
+  .btn-primary {
+    @apply btn bg-brand-600 text-white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-brand-500;
+    box-shadow: 0 2px 8px rgba(79,70,229,0.30), inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+  .btn-primary:active:not(:disabled) {
+    @apply bg-brand-700;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
+  }
+
+  /* Secondary — bordered, surface background */
+  .btn-secondary {
+    @apply btn text-slate-300 border border-surface-border bg-surface-card;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    @apply border-surface-muted text-slate-100 bg-surface-raised;
+  }
+  .btn-secondary:active:not(:disabled) {
+    @apply bg-surface-card;
+  }
+
+  /* Ghost — no background until interacted */
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-400;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    @apply text-slate-100 bg-surface-hover;
+  }
+  .btn-ghost:active:not(:disabled) {
+    @apply bg-surface-raised;
+  }
+
+  /* Danger — rose-600, same flat pattern as primary */
+  .btn-danger {
+    @apply btn bg-rose-600 text-white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .btn-danger:hover:not(:disabled) {
+    @apply bg-rose-500;
+    box-shadow: 0 2px 8px rgba(244,63,94,0.26);
+  }
+  .btn-danger:active:not(:disabled) {
+    @apply bg-rose-700;
+  }
+
+  /* Icon-only — square, same hover language as secondary */
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl
+           border border-surface-border text-slate-400 bg-surface-card
+           transition-all duration-150
+           hover:text-slate-100 hover:border-surface-muted hover:bg-surface-raised
+           active:bg-surface-card
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  /* ─── Input ────────────────────────────────────────────────────────────────
+   * Clean border + surface background. Focus ring uses brand-500 at 15%
+   * for a visible-but-calm indicator. No inset shadows (adds visual noise).
+   * ─────────────────────────────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-surface-card border border-surface-border text-slate-100
+           placeholder-slate-600
+           rounded-xl px-3 py-2 text-sm transition-all duration-150
+           focus:outline-none focus:border-brand-500/50;
+  }
+  .input:focus {
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
+
+  /* ─── Table ────────────────────────────────────────────────────────────────
+   * Table headers use uppercase tracking — WCAG requires ≥4.5:1 for body
+   * text; 10px text needs higher contrast ratio, so slate-400 is used
+   * instead of slate-500 for headers.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .table-cell {
+    @apply px-4 py-3.5 text-sm text-slate-200 whitespace-nowrap;
+  }
+  .table-header {
+    @apply px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400
+           cursor-pointer select-none whitespace-nowrap transition-colors duration-150;
+  }
+  .table-header:hover { @apply text-slate-100; }
+
+  /* ─── Skeleton ─────────────────────────────────────────────────────────────
+   * Neutral zinc shimmer — no blue tinting (old palette was blue-navy which
+   * made skeletons look like content placeholders in wrong color).
+   * ─────────────────────────────────────────────────────────────────────── */
+  .skeleton {
+    @apply rounded-lg overflow-hidden;
+    background: linear-gradient(
+      90deg,
+      rgba(39,39,42,0.50)  0%,     /* zinc-800 */
+      rgba(63,63,70,0.70)  40%,    /* zinc-700 */
+      rgba(82,82,91,0.75)  50%,    /* zinc-600 */
+      rgba(63,63,70,0.70)  60%,
+      rgba(39,39,42,0.50)  100%
+    );
+    background-size: 250% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* ─── Badge ────────────────────────────────────────────────────────────────
+   * Badges convey status/category. Color is semantic, never decorative.
+   * Opacity values on bg/border create the tinted pill without requiring
+   * custom hex values — stays in sync with accent palette automatically.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold
+           tracking-[0.05em] uppercase border;
+  }
+  .badge-brand   { @apply badge bg-brand-500/10   border-brand-500/22   text-brand-400; }
+  .badge-emerald { @apply badge bg-emerald-500/10 border-emerald-500/22 text-emerald-400; }
+  .badge-amber   { @apply badge bg-amber-500/10   border-amber-500/22   text-amber-400; }
+  .badge-rose    { @apply badge bg-rose-500/10    border-rose-500/22    text-rose-400; }
+  .badge-violet  { @apply badge bg-violet-500/10  border-violet-500/22  text-violet-400; }
+  .badge-cyan    { @apply badge bg-cyan-500/10    border-cyan-500/22    text-cyan-400; }
+  .badge-slate   { @apply badge bg-white/4        border-surface-muted  text-slate-400; }
+
+  /* ─── Section label ────────────────────────────────────────────────────────
+   * Consistent SECTION LABELS used above nav groups, card groups, filters.
+   * Font-weight is semibold (not bold) — less heavy at 10px optical size.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500;
+  }
+
+  /* ─── Section heading with icon + rule ────────────────────────────────────── */
+  .section-heading {
+    @apply flex items-center gap-2.5 mb-5;
+  }
+  .section-heading-icon {
+    @apply w-6 h-6 rounded-lg flex items-center justify-center shrink-0
+           border border-brand-500/22 bg-brand-500/10 text-brand-400;
+  }
+
+  /* ─── Stat (drawer / mini card) ────────────────────────────────────────────
+   * For labeled value pairs. Label is restrained; value is primary text weight.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .stat-label { @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500; }
+  .stat-value { @apply text-base font-bold text-slate-50 tabular-nums leading-tight; }
+
+  /* ─── Gradient text helpers ────────────────────────────────────────────────
+   * Intentional use only: KPI values, positive/negative deltas, key numbers.
+   * NOT for decorative headings or buttons — those use flat color.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 50%, #818cf8 100%);
+  }
+  .gradient-text-brand {
+    @apply bg-clip-text text-transparent font-extrabold;
+    background-image: linear-gradient(135deg, #a5b4fc 0%, #a78bfa 55%, #c084fc 100%);
+  }
+  .gradient-text-emerald {
+    @apply bg-clip-text text-transparent font-extrabold;
+    background-image: linear-gradient(135deg, #6ee7b7 0%, #34d399 50%, #10b981 100%);
+  }
+  .gradient-text-rose {
+    @apply bg-clip-text text-transparent font-extrabold;
+    background-image: linear-gradient(135deg, #fca5a5 0%, #f87171 50%, #ef4444 100%);
+  }
+  .gradient-text-amber {
+    @apply bg-clip-text text-transparent font-extrabold;
+    background-image: linear-gradient(135deg, #fde68a 0%, #fbbf24 100%);
+  }
+
+  /* ─── Dividers ─────────────────────────────────────────────────────────────
+   * Solid lines instead of gradient fades — cleaner on neutral surfaces.
+   * divider-brand retains a subtle fade for the sidebar brand header area.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .divider          { @apply h-px bg-surface-border; }
+  .divider-vertical { @apply w-px bg-surface-border; }
+  .divider-brand    {
+    @apply h-px;
+    /* Very subtle brand tint — used only in sidebar header */
+    background: linear-gradient(to right, transparent, rgba(99,102,241,0.25) 50%, transparent);
+  }
+
+  /* ─── Chart tooltip ────────────────────────────────────────────────────────
+   * Uses zinc-900 background (card-level). Reduced border-radius vs old
+   * 14px → 12px: tooltips are small UI, smaller radius looks crisper.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .chart-tooltip {
+    background: rgba(17, 17, 19, 0.98);       /* surface-card */
+    border: 1px solid rgba(39,39,42,0.90);    /* surface-border */
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.50), 0 1px 4px rgba(0,0,0,0.30);
+    backdrop-filter: blur(10px);
+    min-width: 160px;
+    animation: fadeIn 0.12s ease-out;
+  }
+  .chart-tooltip-title {
+    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(39,39,42,0.80);
+  }
+  .chart-tooltip-row {
+    @apply flex items-center justify-between gap-4 text-xs;
+    margin-top: 6px;
+  }
+  .chart-tooltip-label { @apply flex items-center gap-2 text-slate-400 font-medium; }
+  .chart-tooltip-value { @apply font-semibold text-slate-50 tabular-nums; }
+  .chart-tooltip-dot   { @apply w-2 h-2 rounded-full shrink-0; }
+
+  /* ─── Tag / chip ──────────────────────────────────────────────────────────── */
+  .tag {
+    @apply inline-flex items-center gap-1 text-[10px] font-semibold
+           px-1.5 py-0.5 rounded-md border border-surface-border bg-surface-raised text-slate-400;
+  }
+
+  /* ─── Nav item active state ────────────────────────────────────────────────
+   * Flat background with a subtle brand border — no gradient, no glow.
+   * The left accent bar (in Sidebar.tsx) provides the directional cue.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .nav-active {
+    background: rgba(99,102,241,0.10);
+    border: 1px solid rgba(99,102,241,0.22);
+  }
+
+  /* ─── Ring accents (icon / avatar borders) ─────────────────────────────────
+   * Replaced neon glows with crisp 2px rings. More precise on dark surfaces.
+   * ─────────────────────────────────────────────────────────────────────── */
+  .glow-ring-brand   { box-shadow: 0 0 0 2px rgba(99,102,241,0.22); }
+  .glow-ring-emerald { box-shadow: 0 0 0 2px rgba(16,185,129,0.22); }
+  .glow-ring-rose    { box-shadow: 0 0 0 2px rgba(244,63,94,0.22); }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  UTILITIES
+ *  One-off helper classes that don't belong in components.
+ * ════════════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty  { text-wrap: pretty;  }
+
+  /* Numeric typography — combines tabular-nums feature with OS-level setting */
+  .tabular-nums-pro {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Ring-based depth utilities — consistent with shadow scale in tailwind.config */
+  .glow-indigo  { box-shadow: 0 0 0 1px rgba(99,102,241,0.22),  0 4px 16px rgba(0,0,0,0.28); }
+  .glow-emerald { box-shadow: 0 0 0 1px rgba(16,185,129,0.18),  0 4px 16px rgba(0,0,0,0.24); }
+  .glow-rose    { box-shadow: 0 0 0 1px rgba(244,63,94,0.18),   0 4px 16px rgba(0,0,0,0.24); }
+  .glow-amber   { box-shadow: 0 0 0 1px rgba(245,158,11,0.16),  0 4px 16px rgba(0,0,0,0.24); }
+
+  /* Staggered child entrance — use .stagger on a list/grid container.
+   * Adds subtle cascade effect; 8 levels cover most dashboard lists.
+   */
+  .stagger > *              { animation: fadeInUp 0.28s cubic-bezier(0.16,1,0.3,1) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.04s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.08s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.10s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.12s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.16s; }
+
+  /* Gradient mask fades */
+  .mask-fade-r { mask-image: linear-gradient(to right,  black 80%, transparent); }
+  .mask-fade-b { mask-image: linear-gradient(to bottom, black 60%, transparent); }
+
+  .clickable { @apply cursor-pointer select-none; }
+
+  /* Progress bar system */
+  .progress-bar      { @apply h-1 rounded-full overflow-hidden bg-surface-border; }
+  .progress-bar-fill { @apply h-full rounded-full transition-all duration-500; }
+
+  /* Extra transition duration (matches tokens --duration-slow) */
+  .duration-250 { transition-duration: 250ms; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  KEYFRAMES
+ * ════════════════════════════════════════════════════════════════════════════ */
+@keyframes shimmer {
+  0%   { background-position: -250% center; }
+  100% { background-position:  250% center; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes expandWidth {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  REACT-DATEPICKER — DARK THEME (zinc-based)
+ *
+ *  Re-themed to match the new zinc surface palette.
+ *  Day selection uses flat brand-600 (no gradient) — consistent with buttons.
+ * ════════════════════════════════════════════════════════════════════════════ */
+.react-datepicker {
+  background: #111113 !important;           /* surface-card */
+  border: 1px solid #27272A !important;     /* surface-border */
+  border-radius: 14px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.30) !important;
+  font-family: 'Inter', sans-serif !important;
+  overflow: hidden;
+}
+.react-datepicker__header {
+  background: #09090B !important;           /* surface */
+  border-bottom: 1px solid #27272A !important;
+  border-radius: 0 !important;
+  padding: 12px 0 8px !important;
+}
+.react-datepicker__current-month,
+.react-datepicker__day-name,
+.react-datepicker-time__header {
+  color: #71717A !important;   /* zinc-500 */
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+}
+.react-datepicker__current-month {
+  color: #E4E4E7 !important;   /* zinc-200 */
+  font-size: 13px !important;
+}
+.react-datepicker__day {
+  color: #A1A1AA !important;   /* zinc-400 */
+  border-radius: 6px !important;
+  width: 32px !important;
+  line-height: 32px !important;
+  font-size: 12px !important;
+  transition: all 0.12s ease !important;
+}
+.react-datepicker__day:hover {
+  background: rgba(99,102,241,0.15) !important;
+  color: #E4E4E7 !important;
+}
+.react-datepicker__day--selected,
+.react-datepicker__day--range-start,
+.react-datepicker__day--range-end {
+  background: #4f46e5 !important;  /* brand-600 — flat, no gradient */
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+.react-datepicker__day--in-range {
+  background: rgba(99,102,241,0.12) !important;
+  color: #A5B4FC !important;   /* brand-300 */
+}
+.react-datepicker__day--disabled         { color: #3F3F46 !important; }   /* zinc-700 */
+.react-datepicker__navigation-icon::before { border-color: #52525B !important; }
+.react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
+  border-color: #A1A1AA !important;
+}
+.react-datepicker__day--keyboard-selected {
+  background: rgba(99,102,241,0.20) !important;
+}

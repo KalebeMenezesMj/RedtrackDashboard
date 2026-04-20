@@ -1,0 +1,210 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Design Tokens — RedTrack Dashboard
+ *
+ *  Single source of truth for the visual system. Consumed by Tailwind via
+ *  tailwind.config.js (colors/shadows/radii) and by components directly
+ *  via these CSS custom properties.
+ *
+ *  Structure:
+ *    1. Surface palette (dark neutral base)
+ *    2. Brand (indigo)
+ *    3. Semantic accents (success/danger/warning/info)
+ *    4. Text hierarchy
+ *    5. Typography scale
+ *    6. Spacing grid (4px unit)
+ *    7. Border radius
+ *    8. Shadow scale
+ *    9. Motion (easing + duration)
+ *   10. Z-index scale
+ *   11. Light mode foundation (reserved — not yet active)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── 1. Surface palette ─────────────────────────────────────────────────
+   * Zinc-based neutral dark gray — professional, no blue tinting.
+   * Inspired by Vercel/Linear dark mode: surfaces read as "tool" not "tech".
+   * Ordered from darkest (sunken) → lightest (muted border).
+   * ────────────────────────────────────────────────────────────────────── */
+  --color-surface:          #09090B;   /* zinc-950  — body background        */
+  --color-surface-sunken:   #050506;   /* near-black — recessed behind cards  */
+  --color-surface-card:     #111113;   /* zinc-900± — card / panel background */
+  --color-surface-card2:    #18181B;   /* zinc-900  — elevated (drawer/popup)  */
+  --color-surface-raised:   #27272A;   /* zinc-800  — raised / active state   */
+  --color-surface-hover:    #1E1E23;   /* zinc-850± — subtle interactive hover */
+  --color-surface-border:   #27272A;   /* zinc-800  — standard border         */
+  --color-surface-muted:    #3F3F46;   /* zinc-700  — emphasis border / focus  */
+  --color-surface-divider:  #1C1C1F;   /* zinc-850± — hairline dividers        */
+
+  /* ── 2. Brand — Indigo ──────────────────────────────────────────────────
+   * Single primary accent. Used for: CTAs, active states, focus rings,
+   * data highlights. NOT used as a full-spectrum palette — only 400–600
+   * appear in UI; the rest are for data visualisations if needed.
+   * ────────────────────────────────────────────────────────────────────── */
+  --color-brand-50:   #eef2ff;
+  --color-brand-100:  #e0e7ff;
+  --color-brand-200:  #c7d2fe;
+  --color-brand-300:  #a5b4fc;
+  --color-brand-400:  #818cf8;   /* ← hover / lighter emphasis       */
+  --color-brand-500:  #6366f1;   /* ← default brand accent           */
+  --color-brand-600:  #4f46e5;   /* ← primary button fill            */
+  --color-brand-700:  #4338ca;   /* ← active / pressed state         */
+  --color-brand-800:  #3730a3;
+  --color-brand-900:  #1e1b4b;
+
+  /* ── 3. Semantic accents ────────────────────────────────────────────────
+   * Each maps to a specific data meaning — do not swap them.
+   * ────────────────────────────────────────────────────────────────────── */
+  --color-success:   #10b981;   /* emerald-500 — profit, positive delta, uptime */
+  --color-danger:    #f43f5e;   /* rose-500    — loss, error, critical alert     */
+  --color-warning:   #f59e0b;   /* amber-500   — caution, partial alert          */
+  --color-info:      #3b82f6;   /* blue-500    — spend, informational            */
+  --color-violet:    #8b5cf6;   /* violet-500  — conversions, secondary metric   */
+  --color-cyan:      #06b6d4;   /* cyan-500    — checkout, tertiary metric        */
+
+  /* ── 4. Text hierarchy ──────────────────────────────────────────────────
+   * Four levels provide clear scanning hierarchy without over-contrasting.
+   * AA contrast (≥4.5:1) is met for primary/secondary on dark surfaces.
+   * ────────────────────────────────────────────────────────────────────── */
+  --color-text-primary:    #FAFAFA;   /* zinc-50  — headings, values, primary labels */
+  --color-text-secondary:  #A1A1AA;   /* zinc-400 — supporting text, descriptions    */
+  --color-text-tertiary:   #71717A;   /* zinc-500 — meta, placeholders, subtle hints */
+  --color-text-disabled:   #52525B;   /* zinc-600 — disabled / "coming soon" labels  */
+  --color-text-muted:      #3F3F46;   /* zinc-700 — de-emphasised / background text  */
+
+  /* ── 5. Typography scale ────────────────────────────────────────────────
+   * Dashboard-optimised: slightly tighter than browser defaults.
+   * Inter for UI text; JetBrains Mono for numbers, code, monospaced data.
+   * ────────────────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  --text-2xs:   0.625rem;    /* 10px — badge, label, section heading */
+  --text-xs:    0.75rem;     /* 12px — small UI elements             */
+  --text-sm:    0.8125rem;   /* 13px — compact body / table cells    */
+  --text-base:  0.9375rem;   /* 15px — primary body text             */
+  --text-lg:    1.0625rem;   /* 17px — subheadings                   */
+  --text-xl:    1.1875rem;   /* 19px — card headings                 */
+  --text-2xl:   1.4375rem;   /* 23px — section titles                */
+  --text-3xl:   1.75rem;     /* 28px — page titles                   */
+  --text-4xl:   2.125rem;    /* 34px — hero / KPI values             */
+
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed:1.625;
+
+  --tracking-tight:   -0.02em;
+  --tracking-snug:    -0.01em;
+  --tracking-normal:   0;
+  --tracking-wide:     0.04em;
+  --tracking-wider:    0.08em;
+  --tracking-widest:   0.14em;   /* section labels / badges */
+
+  /* ── 6. Spacing — strict 4px grid ──────────────────────────────────────
+   * All layout decisions should use multiples of 4px.
+   * ────────────────────────────────────────────────────────────────────── */
+  --space-px:  1px;
+  --space-0:   0;
+  --space-1:   0.25rem;   /*  4px */
+  --space-2:   0.5rem;    /*  8px */
+  --space-3:   0.75rem;   /* 12px */
+  --space-4:   1rem;      /* 16px */
+  --space-5:   1.25rem;   /* 20px */
+  --space-6:   1.5rem;    /* 24px */
+  --space-8:   2rem;      /* 32px */
+  --space-10:  2.5rem;    /* 40px */
+  --space-12:  3rem;      /* 48px */
+  --space-16:  4rem;      /* 64px */
+  --space-20:  5rem;      /* 80px */
+  --space-24:  6rem;      /* 96px */
+
+  /* ── 7. Border radius ───────────────────────────────────────────────────
+   * Consistent corner treatment across component types.
+   * ────────────────────────────────────────────────────────────────────── */
+  --radius-sm:   4px;      /* tags, tiny chips                   */
+  --radius-md:   8px;      /* inputs, small elements             */
+  --radius-lg:   12px;     /* buttons, tooltips, date picker     */
+  --radius-xl:   16px;     /* card (standard)                    */
+  --radius-2xl:  20px;     /* card (large), sidebar, drawer      */
+  --radius-3xl:  24px;     /* modal                              */
+  --radius-full: 9999px;   /* pills, avatars, status dots        */
+
+  /* ── 8. Shadow scale ────────────────────────────────────────────────────
+   * Depth without drama. Uses pure black at low opacity — no colored
+   * glows or bloom effects. Focus ring uses brand color for a11y clarity.
+   * ────────────────────────────────────────────────────────────────────── */
+  --shadow-xs:     0 1px 2px rgba(0,0,0,0.18);
+  --shadow-sm:     0 1px 2px rgba(0,0,0,0.18),  0 4px 16px rgba(0,0,0,0.22);
+  --shadow-md:     0 2px 8px rgba(0,0,0,0.22),  0 8px 28px rgba(0,0,0,0.30);
+  --shadow-lg:     0 4px 16px rgba(0,0,0,0.26), 0 16px 48px rgba(0,0,0,0.36);
+  --shadow-xl:     0 8px 32px rgba(0,0,0,0.36), 0 32px 80px rgba(0,0,0,0.44);
+  --shadow-drawer: -8px 0 40px rgba(0,0,0,0.44);
+  --shadow-focus:  0 0 0 3px rgba(99,102,241,0.22);  /* brand-500 @ 22% */
+
+  /* ── 9. Motion ──────────────────────────────────────────────────────────
+   * Purposeful animation: entrance curves feel natural; exit is quicker.
+   * "smooth" is used for content; "snappy" for panels/drawers.
+   * ────────────────────────────────────────────────────────────────────── */
+  --ease-smooth:    cubic-bezier(0.16, 1, 0.3, 1);    /* natural deceleration */
+  --ease-snappy:    cubic-bezier(0.32, 0.72, 0, 1);   /* panel slide-in       */
+  --ease-back:      cubic-bezier(0.34, 1.56, 0.64, 1);/* slight overshoot     */
+  --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);     /* Material-style       */
+  --ease-linear:    linear;
+
+  --duration-instant: 80ms;
+  --duration-fast:    120ms;
+  --duration-base:    160ms;   /* hover, focus ring                */
+  --duration-slow:    250ms;   /* card lift, expand                */
+  --duration-slower:  350ms;   /* entrance animations              */
+  --duration-slowest: 500ms;   /* page transitions                 */
+
+  /* ── 10. Z-index scale ──────────────────────────────────────────────────
+   * Named layers prevent collisions. Never use magic numbers.
+   * ────────────────────────────────────────────────────────────────────── */
+  --z-base:      0;
+  --z-raised:    1;      /* local elevation within a card   */
+  --z-dropdown:  100;    /* menus, date picker              */
+  --z-sticky:    200;    /* sticky headers / sidebars       */
+  --z-overlay:   300;    /* drawer backdrops                */
+  --z-drawer:    350;    /* side drawers                    */
+  --z-modal:     400;    /* modal dialogs                   */
+  --z-toast:     500;    /* notifications                   */
+  --z-tooltip:   600;    /* tooltips (always on top)        */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Light mode — Reserved (not yet active)
+ *
+ *  The app currently ships dark-only. These tokens are provided as a
+ *  complete foundation for a future light mode. Activating them requires:
+ *    1. Add `data-theme="light"` to <html> (or use prefers-color-scheme)
+ *    2. Update component classes that use hardcoded dark values (e.g.
+ *       inline styles, direct bg-slate-* classes not mapped to surface-*)
+ *    3. Test all charts, datepicker, and drawer components separately
+ *
+ *  Light palette follows the same neutral-first philosophy:
+ *  white/zinc base, indigo accent, same semantic colors.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --color-surface:          #FFFFFF;
+  --color-surface-sunken:   #F4F4F5;   /* zinc-100 */
+  --color-surface-card:     #FFFFFF;
+  --color-surface-card2:    #FAFAFA;   /* zinc-50  */
+  --color-surface-raised:   #F4F4F5;   /* zinc-100 */
+  --color-surface-hover:    #F0F0F1;   /* zinc-100 darker */
+  --color-surface-border:   #E4E4E7;   /* zinc-200 */
+  --color-surface-muted:    #D4D4D8;   /* zinc-300 */
+  --color-surface-divider:  #E4E4E7;   /* zinc-200 */
+
+  --color-text-primary:    #09090B;   /* zinc-950 */
+  --color-text-secondary:  #52525B;   /* zinc-600 */
+  --color-text-tertiary:   #71717A;   /* zinc-500 */
+  --color-text-disabled:   #A1A1AA;   /* zinc-400 */
+  --color-text-muted:      #D4D4D8;   /* zinc-300 */
+
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.06);
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.06),  0 4px 16px rgba(0,0,0,0.06);
+  --shadow-md:  0 2px 8px rgba(0,0,0,0.08),  0 8px 28px rgba(0,0,0,0.07);
+  --shadow-lg:  0 4px 16px rgba(0,0,0,0.10), 0 16px 48px rgba(0,0,0,0.08);
+  --shadow-xl:  0 8px 32px rgba(0,0,0,0.12), 0 32px 80px rgba(0,0,0,0.10);
+}
