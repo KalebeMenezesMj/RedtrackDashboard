@@ -29,6 +29,15 @@ async function hasValidJWT(token: string | undefined, role: 'admin' | 'dash'): P
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function safeDecode(value: string | null): string {
+  if (!value) return ''
+  try { return decodeURIComponent(value) } catch { return value }
+}
+
+// ---------------------------------------------------------------------------
 // Padrões a ignorar no rastreamento
 // ---------------------------------------------------------------------------
 
@@ -105,8 +114,10 @@ export async function middleware(request: NextRequest) {
       country:   request.headers.get('x-vercel-ip-country') ||
                  request.headers.get('cf-ipcountry')         ||
                  (request as unknown as { geo?: { country?: string } }).geo?.country || '',
-      city:      request.headers.get('x-vercel-ip-city') ||
-                 (request as unknown as { geo?: { city?: string } }).geo?.city || '',
+      city:      safeDecode(
+                   request.headers.get('x-vercel-ip-city') ||
+                   (request as unknown as { geo?: { city?: string } }).geo?.city || ''
+                 ),
     })
 
     fetch(new URL('/api/admin/track', request.url).toString(), {
