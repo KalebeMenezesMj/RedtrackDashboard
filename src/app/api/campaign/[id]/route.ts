@@ -28,13 +28,17 @@ export async function GET(
     const chartData: ChartDataPoint[] = dailyRows
       .filter(r => r.date)
       .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-      .map(row => ({
-        date:    row.date    ?? '',
-        spend:   row.cost    ?? 0,
-        revenue: row.revenue ?? 0,
-        profit:  row.profit  ?? ((row.revenue ?? 0) - (row.cost ?? 0)),
-        roi:     row.roi     ?? calcROI(row.revenue ?? 0, row.cost ?? 0),
-      }))
+      .map(row => {
+        const rev  = row.total_revenue ?? row.revenuetype1 ?? row.revenue ?? 0
+        const cost = row.cost ?? 0
+        return {
+          date:    row.date ?? '',
+          spend:   cost,
+          revenue: rev,
+          profit:  row.profit ?? (rev - cost),
+          roi:     row.roi    ?? calcROI(rev, cost),
+        }
+      })
 
     return NextResponse.json({ ok: true, chartData })
   } catch (err: unknown) {

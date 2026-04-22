@@ -49,16 +49,21 @@ export async function GET(req: NextRequest) {
 
     // ── KPIs — calculados somando os items (campanhas ativas) ─────────────────
     // Não usamos o `total` da API pois ele pode incluir campanhas inativas
+    // NOTA: r.revenue é sempre 0 na RedTrack — receita real está em
+    //       r.total_revenue (ou r.revenuetype1 como fallback)
     const summed = campaignRows.reduce(
-      (acc, r) => ({
-        cost:              acc.cost              + (r.cost        ?? 0),
-        revenue:           acc.revenue           + (r.revenue     ?? 0),
-        profit:            acc.profit            + (r.profit      ?? ((r.revenue ?? 0) - (r.cost ?? 0))),
-        conversions:       acc.conversions       + (r.conversions ?? 0),
-        clicks:            acc.clicks            + (r.clicks      ?? 0),
-        purchases:         acc.purchases         + (r.convtype1   ?? 0),
-        initiateCheckouts: acc.initiateCheckouts + (r.convtype2   ?? 0),
-      }),
+      (acc, r) => {
+        const rev = r.total_revenue ?? r.revenuetype1 ?? r.revenue ?? 0
+        return {
+          cost:              acc.cost              + (r.cost        ?? 0),
+          revenue:           acc.revenue           + rev,
+          profit:            acc.profit            + (r.profit      ?? (rev - (r.cost ?? 0))),
+          conversions:       acc.conversions       + (r.conversions ?? 0),
+          clicks:            acc.clicks            + (r.clicks      ?? 0),
+          purchases:         acc.purchases         + (r.convtype1   ?? 0),
+          initiateCheckouts: acc.initiateCheckouts + (r.convtype2   ?? 0),
+        }
+      },
       { cost: 0, revenue: 0, profit: 0, conversions: 0, clicks: 0, purchases: 0, initiateCheckouts: 0 },
     )
 
@@ -77,29 +82,38 @@ export async function GET(req: NextRequest) {
     const chartData: ChartDataPoint[] = dailyRows
       .filter(r => r.date)
       .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-      .map(row => ({
-        date:    row.date    ?? '',
-        spend:   row.cost    ?? 0,
-        revenue: row.revenue ?? 0,
-        profit:  row.profit  ?? ((row.revenue ?? 0) - (row.cost ?? 0)),
-        roi:     row.roi     ?? calcROI(row.revenue ?? 0, row.cost ?? 0),
-      }))
+      .map(row => {
+        const rev = row.total_revenue ?? row.revenuetype1 ?? row.revenue ?? 0
+        const cost = row.cost ?? 0
+        return {
+          date:    row.date ?? '',
+          spend:   cost,
+          revenue: rev,
+          profit:  row.profit ?? (rev - cost),
+          roi:     row.roi    ?? calcROI(rev, cost),
+        }
+      })
 
     // ── Tabela ────────────────────────────────────────────────────────────────
-    const campaigns: CampaignRow[] = campaignRows.map((row, i) => ({
-      id:                row.campaign_id ?? String(i),
-      name:              row.campaign    ?? `Campanha ${i + 1}`,
-      clicks:            row.clicks      ?? 0,
-      conversions:       row.conversions ?? 0,
-      cost:              row.cost        ?? 0,
-      revenue:           row.revenue     ?? 0,
-      profit:            row.profit      ?? ((row.revenue ?? 0) - (row.cost ?? 0)),
-      roi:               row.roi         ?? calcROI(row.revenue ?? 0, row.cost ?? 0),
-      cpa:               row.cpa         ?? calcCPA(row.cost ?? 0, row.conversions ?? 0),
-      cr:                row.cr          ?? calcCR(row.conversions ?? 0, row.clicks ?? 0),
-      purchases:         row.convtype1   ?? 0,
-      initiateCheckouts: row.convtype2   ?? 0,
-    }))
+    const campaigns: CampaignRow[] = campaignRows.map((row, i) => {
+      const rev  = row.total_revenue ?? row.revenuetype1 ?? row.revenue ?? 0
+      const cost = row.cost ?? 0
+      const conv = row.conversions ?? 0
+      return {
+        id:                row.campaign_id ?? String(i),
+        name:              row.campaign    ?? `Campanha ${i + 1}`,
+        clicks:            row.clicks      ?? 0,
+        conversions:       conv,
+        cost,
+        revenue:           rev,
+        profit:            row.profit ?? (rev - cost),
+        roi:               row.roi    ?? calcROI(rev, cost),
+        cpa:               row.cpa    ?? calcCPA(cost, conv),
+        cr:                row.cr     ?? calcCR(conv, row.clicks ?? 0),
+        purchases:         row.convtype1 ?? 0,
+        initiateCheckouts: row.convtype2 ?? 0,
+      }
+    })
 
     return NextResponse.json({ ok: true, kpis, chartData, campaigns, dateRange })
   } catch (err: unknown) {

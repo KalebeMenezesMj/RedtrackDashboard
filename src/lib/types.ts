@@ -25,8 +25,10 @@ export interface RedTrackReportRow {
   lp_views?:    number
   lp_clicks?:   number
   impressions?: number
-  total_revenue?: number
-  roas?:        number
+  total_revenue?:  number
+  revenuetype1?:   number   // receita de convtype1 (Purchase)
+  revenuetype2?:   number   // receita de convtype2 (InitiateCheckout)
+  roas?:           number
 
   // Tipos de conversão (convtype1 = Purchase, convtype2 = InitiateCheckout)
   convtype1?:   number
