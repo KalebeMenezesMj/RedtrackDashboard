@@ -147,6 +147,30 @@ export default function DashboardPage() {
   const isProfit = profit >= 0
   const hasRev   = campaigns.some(c => c.revenue > 0)
 
+  // ── Taxas de funil ────────────────────────────────────────────────────────
+  const clicks    = kpis?.clicks            ?? 0
+  const checkouts = kpis?.initiateCheckouts ?? 0
+  const purchases = kpis?.purchases         ?? 0
+
+  /** Init. Checkout / Cliques × 100 */
+  const checkoutRate = clicks    > 0 ? (checkouts / clicks)    * 100 : 0
+  /** Compras / Init. Checkout × 100 */
+  const purchaseRate = checkouts > 0 ? (purchases / checkouts) * 100 : 0
+
+  function fmtPct(v: number) {
+    return v === 0 ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+  }
+  // Tom visual: ≥20% compra = boa, ≥10% = ok, <10% = aviso
+  function purchaseTone(v: number): 'good' | 'warn' | 'neutral' {
+    if (v === 0) return 'neutral'
+    return v >= 20 ? 'good' : v >= 10 ? 'warn' : 'neutral'
+  }
+  // Tom visual checkout: ≥1% = boa, ≥0.3% = ok, <0.3% = aviso
+  function checkoutTone(v: number): 'good' | 'warn' | 'neutral' {
+    if (v === 0) return 'neutral'
+    return v >= 1 ? 'good' : v >= 0.3 ? 'warn' : 'neutral'
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
       <Sidebar />
@@ -287,6 +311,11 @@ export default function DashboardPage() {
                 color="emerald"
                 loading={loading}
                 tooltip="Número de eventos do tipo Purchase — compras confirmadas no período."
+                funnel={loading ? undefined : {
+                  label: 'de checkouts',
+                  value: fmtPct(purchaseRate),
+                  tone:  purchaseTone(purchaseRate),
+                }}
               />
               <KPICard
                 title="Init. Checkout"
@@ -295,6 +324,11 @@ export default function DashboardPage() {
                 color="cyan"
                 loading={loading}
                 tooltip="Usuários que iniciaram o checkout. Indica intenção de compra antes da conversão."
+                funnel={loading ? undefined : {
+                  label: 'dos cliques',
+                  value: fmtPct(checkoutRate),
+                  tone:  checkoutTone(checkoutRate),
+                }}
               />
             </div>
           </section>

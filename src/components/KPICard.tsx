@@ -1,9 +1,18 @@
 'use client'
 
-import { LucideIcon, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { LucideIcon, TrendingUp, TrendingDown, Minus, GitBranch } from 'lucide-react'
 import clsx from 'clsx'
 
 /* ────────────────────────────────────────────────────────────────────────── */
+
+interface FunnelRate {
+  /** Ex.: "Init. Checkout → Compras" */
+  label: string
+  /** Ex.: "21.5%" */
+  value: string
+  /** Contexto visual: good = verde, warn = âmbar, neutral = cinza */
+  tone?: 'good' | 'warn' | 'neutral'
+}
 
 interface Props {
   title:     string
@@ -14,6 +23,8 @@ interface Props {
   color:     'blue' | 'emerald' | 'violet' | 'amber' | 'red' | 'cyan'
   loading?:  boolean
   tooltip?:  string
+  /** Exibe taxa de funil abaixo do valor principal */
+  funnel?:   FunnelRate
 }
 
 // Color map: only semantic values — no glow, no gradient, no bloom.
@@ -30,7 +41,7 @@ const colorMap = {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export default function KPICard({
-  title, value, delta, positive, icon: Icon, color, loading, tooltip,
+  title, value, delta, positive, icon: Icon, color, loading, tooltip, funnel,
 }: Props) {
   const c = colorMap[color]
 
@@ -44,6 +55,7 @@ export default function KPICard({
         </div>
         <div className="skeleton h-3 w-20 rounded mb-3" />
         <div className="skeleton h-8 w-28 rounded-lg mb-1" />
+        {funnel && <div className="skeleton h-5 w-24 rounded-lg mt-2.5" />}
       </div>
     )
   }
@@ -91,6 +103,22 @@ export default function KPICard({
       <p className="text-[1.85rem] font-bold text-slate-50 leading-none tabular-nums tracking-tight break-all">
         {value}
       </p>
+
+      {/* Funnel rate — taxa de conversão do funil */}
+      {funnel && (
+        <div className={clsx(
+          'inline-flex items-center gap-1.5 mt-2.5 px-2 py-1 rounded-lg border text-[10px] font-semibold tabular-nums',
+          funnel.tone === 'good'    && 'bg-emerald-500/8 border-emerald-500/18 text-emerald-400',
+          funnel.tone === 'warn'    && 'bg-amber-500/8  border-amber-500/18  text-amber-400',
+          funnel.tone === 'neutral' || !funnel.tone
+            ? 'bg-surface-raised border-surface-muted text-slate-400'
+            : '',
+        )}>
+          <GitBranch size={9} strokeWidth={2.5} className="shrink-0" />
+          <span>{funnel.value}</span>
+          <span className="text-[9px] font-medium opacity-70">{funnel.label}</span>
+        </div>
+      )}
 
       {/* Tooltip — appears on hover, clean card style */}
       {tooltip && (
