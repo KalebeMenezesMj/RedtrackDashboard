@@ -1,96 +1,117 @@
 import { NextResponse } from 'next/server'
 import axios from 'axios'
 
-const BASE   = 'https://api.redtrack.io'
-const KEY    = process.env.REDTRACK_API_KEY ?? ''
+const BASE = 'https://api.redtrack.io'
+const KEY  = process.env.REDTRACK_API_KEY ?? ''
 
 export async function GET() {
-  const results: Record<string, unknown> = {}
+  const to   = fmtDate(new Date())
+  const from = fmtDate(subDays(new Date(), 30))
 
-  const to   = localDate(new Date())
-  const from = localDate(subDays(new Date(), 7))
+  const out: Record<string, unknown> = {}
 
-  // 1. /report group=campaign — ver campos disponíveis (primeira linha)
+  // ── 1. Relatório por campanha — ver TODOS os campos retornados ────────────
   try {
     const r = await axios.get(`${BASE}/report`, {
-      params: { api_key: KEY, date_from: from, date_to: to, group: 'campaign', per: 3 },
+      params: { api_key: KEY, date_from: from, date_to: to, group: 'campaign', total: true, per: 5 },
       timeout: 15_000,
     })
     const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
-    results.report_campaign_fields = {
-      status: r.status,
-      first_row_keys: rows[0] ? Object.keys(rows[0]) : [],
-      first_row: rows[0] ?? null,
+    const total = r.data?.total ?? null
+    out.campaign_report = {
+      total_row: total,
+      all_keys_in_first_row: rows[0] ? Object.keys(rows[0]) : [],
+      // Mostra todos os campos com valor != 0 da primeira linha
+      non_zero_fields: rows[0]
+        ? Object.fromEntries(Object.entries(rows[0]).filter(([, v]) => v !== 0 && v !== null && v !== '' && v !== undefined))
+        : null,
+      // Campos de receita especificamente
+      revenue_fields: rows[0]
+        ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) =>
+            k.toLowerCase().includes('revenue') ||
+            k.toLowerCase().includes('payout') ||
+            k.toLowerCase().includes('income') ||
+            k.toLowerCase().includes('profit') ||
+            k.toLowerCase().includes('goal') ||
+            k.toLowerCase().includes('conv')
+          ))
+        : null,
+      first_3_rows: rows.slice(0, 3),
     }
-  } catch (e: any) {
-    results.report_campaign_fields = { status: e?.response?.status, error: e?.response?.data ?? e?.message }
+  } catch (e: unknown) {
+    const err = e as { response?: { status: number; data: unknown }; message?: string }
+    out.campaign_report = { error: err?.response?.data ?? err?.message }
   }
 
-  // 2. /report group=goal — breakdown por objetivo
-  try {
-    const r = await axios.get(`${BASE}/report`, {
-      params: { api_key: KEY, date_from: from, date_to: to, group: 'goal', per: 10 },
-      timeout: 15_000,
-    })
-    results.report_goal = { status: r.status, data: r.data }
-  } catch (e: any) {
-    results.report_goal = { status: e?.response?.status, error: e?.response?.data ?? e?.message }
-  }
-
-  // 3. /report group=campaign&sub_group=goal — campanha + objetivo
-  try {
-    const r = await axios.get(`${BASE}/report`, {
-      params: { api_key: KEY, date_from: from, date_to: to, group: 'campaign', sub_group: 'goal', per: 5 },
-      timeout: 15_000,
-    })
-    results.report_campaign_goal = { status: r.status, data: r.data }
-  } catch (e: any) {
-    results.report_campaign_goal = { status: e?.response?.status, error: e?.response?.data ?? e?.message }
-  }
-
-  // 4. /conversions — lista de conversões individuais
+  // ── 2. Conversões individuais — ver se têm payout/revenue ────────────────
   try {
     const r = await axios.get(`${BASE}/conversions`, {
       params: { api_key: KEY, date_from: from, date_to: to, per: 3 },
       timeout: 15_000,
     })
     const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
-    results.conversions = {
-      status: r.status,
+    out.conversions = {
       count: rows.length,
-      first_row_keys: rows[0] ? Object.keys(rows[0]) : [],
+      all_keys: rows[0] ? Object.keys(rows[0]) : [],
+      revenue_fields: rows[0]
+        ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) =>
+            k.toLowerCase().includes('revenue') ||
+            k.toLowerCase().includes('payout') ||
+            k.toLowerCase().includes('income')
+          ))
+        : null,
       first_row: rows[0] ?? null,
     }
-  } catch (e: any) {
-    results.conversions = { status: e?.response?.status, error: e?.response?.data ?? e?.message }
+  } catch (e: unknown) {
+    const err = e as { response?: { status: number; data: unknown }; message?: string }
+    out.conversions = { error: err?.response?.data ?? err?.message }
   }
 
-  // 5. /report group=campaign com campos extras (goal fields)
+  // ── 3. Relatório diário — ver se revenue aparece por data ────────────────
   try {
     const r = await axios.get(`${BASE}/report`, {
-      params: {
-        api_key: KEY,
-        date_from: from,
-        date_to: to,
-        group: 'campaign',
-        per: 3,
-        fields: 'clicks,conversions,cost,revenue,goal1_conversions,goal2_conversions,goal3_conversions',
-      },
+      params: { api_key: KEY, date_from: from, date_to: to, group: 'date', per: 5 },
       timeout: 15_000,
     })
     const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
-    results.report_goal_fields = {
-      status: r.status,
-      first_row: rows[0] ?? null,
+    out.daily_report = {
+      // Soma de revenue em todos os dias
+      total_revenue_sum: rows.reduce((s: number, r: Record<string, number>) => s + (r.revenue ?? 0), 0),
+      total_cost_sum:    rows.reduce((s: number, r: Record<string, number>) => s + (r.cost ?? 0), 0),
+      first_3_rows: rows.slice(0, 3),
     }
-  } catch (e: any) {
-    results.report_goal_fields = { status: e?.response?.status, error: e?.response?.data ?? e?.message }
+  } catch (e: unknown) {
+    const err = e as { response?: { status: number; data: unknown }; message?: string }
+    out.daily_report = { error: err?.response?.data ?? err?.message }
   }
 
-  return NextResponse.json(results, { status: 200 })
+  // ── 4. Goals/Offers — checar configuração de payout ──────────────────────
+  try {
+    const r = await axios.get(`${BASE}/offers`, {
+      params: { api_key: KEY, per: 5 },
+      timeout: 15_000,
+    })
+    const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
+    out.offers = {
+      count: rows.length,
+      payout_fields: rows.slice(0, 3).map((o: Record<string, unknown>) =>
+        Object.fromEntries(Object.entries(o).filter(([k]) =>
+          k.toLowerCase().includes('payout') ||
+          k.toLowerCase().includes('revenue') ||
+          k.toLowerCase().includes('goal') ||
+          k === 'name' || k === 'id'
+        ))
+      ),
+    }
+  } catch (e: unknown) {
+    const err = e as { response?: { status: number; data: unknown }; message?: string }
+    out.offers = { error: err?.response?.data ?? err?.message }
+  }
+
+  return NextResponse.json(out, { status: 200 })
 }
 
-function localDate(d: Date) {
+function fmtDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 function subDays(d: Date, n: number) {
