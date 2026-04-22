@@ -54,8 +54,11 @@ export default function KPICard({
           <div className="skeleton h-5 w-14 rounded-lg" />
         </div>
         <div className="skeleton h-3 w-20 rounded mb-3" />
-        <div className="skeleton h-8 w-28 rounded-lg mb-1" />
-        {funnel && <div className="skeleton h-5 w-24 rounded-lg mt-2.5" />}
+        <div className="flex items-end justify-between gap-2">
+          <div className="skeleton h-8 w-28 rounded-lg" />
+          {funnel && <div className="skeleton h-6 w-14 rounded-lg" />}
+        </div>
+        {funnel && <div className="skeleton h-3 w-20 rounded mt-2" />}
       </div>
     )
   }
@@ -99,25 +102,29 @@ export default function KPICard({
         {title}
       </p>
 
-      {/* Value */}
-      <p className="text-[1.85rem] font-bold text-slate-50 leading-none tabular-nums tracking-tight break-all">
-        {value}
-      </p>
+      {/* Value + Funnel rate side by side */}
+      <div className="flex items-end justify-between gap-2">
+        <p className="text-[1.85rem] font-bold text-slate-50 leading-none tabular-nums tracking-tight break-all">
+          {value}
+        </p>
 
-      {/* Funnel rate — taxa de conversão do funil */}
+        {/* Funnel rate — canto direito alinhado à base do valor */}
+        {funnel && (
+          <div className={clsx(
+            'inline-flex items-center gap-1 shrink-0 mb-0.5 px-2 py-1 rounded-lg border text-[10px] font-semibold tabular-nums',
+            funnel.tone === 'good'    && 'bg-emerald-500/8 border-emerald-500/18 text-emerald-400',
+            funnel.tone === 'warn'    && 'bg-amber-500/8  border-amber-500/18  text-amber-400',
+            (!funnel.tone || funnel.tone === 'neutral') && 'bg-surface-raised border-surface-muted text-slate-400',
+          )}>
+            <GitBranch size={9} strokeWidth={2.5} className="shrink-0" />
+            <span>{funnel.value}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Funnel label — linha abaixo, bem pequena */}
       {funnel && (
-        <div className={clsx(
-          'inline-flex items-center gap-1.5 mt-2.5 px-2 py-1 rounded-lg border text-[10px] font-semibold tabular-nums',
-          funnel.tone === 'good'    && 'bg-emerald-500/8 border-emerald-500/18 text-emerald-400',
-          funnel.tone === 'warn'    && 'bg-amber-500/8  border-amber-500/18  text-amber-400',
-          funnel.tone === 'neutral' || !funnel.tone
-            ? 'bg-surface-raised border-surface-muted text-slate-400'
-            : '',
-        )}>
-          <GitBranch size={9} strokeWidth={2.5} className="shrink-0" />
-          <span>{funnel.value}</span>
-          <span className="text-[9px] font-medium opacity-70">{funnel.label}</span>
-        </div>
+        <p className="text-[10px] text-slate-600 font-medium mt-1.5">{funnel.label}</p>
       )}
 
       {/* Tooltip — appears on hover, clean card style */}

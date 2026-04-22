@@ -63,6 +63,17 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
   const roi        = campaign?.roi    ?? 0
   const profitable = profit >= 0
 
+  // ── Taxas de funil da campanha ─────────────────────────────────────────────
+  const camClicks    = campaign?.clicks            ?? 0
+  const camCheckouts = campaign?.initiateCheckouts ?? 0
+  const camPurchases = campaign?.purchases         ?? 0
+  const camCheckoutRate = camClicks    > 0 ? (camCheckouts / camClicks)    * 100 : 0
+  const camPurchaseRate = camCheckouts > 0 ? (camPurchases / camCheckouts) * 100 : 0
+
+  function fmtPct(v: number) {
+    return v === 0 ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+  }
+
   return (
     <>
       {/* Overlay */}
@@ -203,10 +214,20 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
                          tooltip="Total de eventos de conversão registrados." />
               <DrawerKpi label="Compras"      value={formatNumber(campaign?.purchases ?? 0)}
                          icon={ShoppingCart}  color="emerald"
-                         tooltip="Número de eventos do tipo Purchase." />
+                         tooltip="Número de eventos do tipo Purchase."
+                         funnel={{
+                           pct:   fmtPct(camPurchaseRate),
+                           label: 'de checkouts',
+                           tone:  camPurchaseRate >= 20 ? 'good' : camPurchaseRate >= 10 ? 'warn' : 'neutral',
+                         }} />
               <DrawerKpi label="Init. Check." value={formatNumber(campaign?.initiateCheckouts ?? 0)}
                          icon={CreditCard}    color="blue"
-                         tooltip="Usuários que iniciaram o checkout." />
+                         tooltip="Usuários que iniciaram o checkout."
+                         funnel={{
+                           pct:   fmtPct(camCheckoutRate),
+                           label: 'dos cliques',
+                           tone:  camCheckoutRate >= 1 ? 'good' : camCheckoutRate >= 0.3 ? 'warn' : 'neutral',
+                         }} />
               <DrawerKpi label="CPA"
                          value={(campaign?.conversions ?? 0) > 0 ? formatCurrency(campaign?.cpa ?? 0) : '—'}
                          icon={DollarSign}    color="violet"
@@ -286,11 +307,18 @@ const drawerColorMap = {
   cyan:    { icon: 'text-cyan-400',    bg: 'bg-cyan-500/8',    border: 'border-cyan-500/15' },
 }
 
+interface DrawerFunnel {
+  pct:   string
+  label: string
+  tone:  'good' | 'warn' | 'neutral'
+}
+
 function DrawerKpi({
-  label, value, icon: Icon, color, tooltip,
+  label, value, icon: Icon, color, tooltip, funnel,
 }: {
   label: string; value: string
-  icon: React.ElementType; color: keyof typeof drawerColorMap; tooltip?: string
+  icon: React.ElementType; color: keyof typeof drawerColorMap
+  tooltip?: string; funnel?: DrawerFunnel
 }) {
   const c = drawerColorMap[color]
   return (
@@ -300,7 +328,24 @@ function DrawerKpi({
         <Icon size={11} className={c.icon} strokeWidth={2.2} />
       </div>
       <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.10em]">{label}</p>
-      <p className="text-sm font-bold text-slate-100 tabular-nums leading-none">{value}</p>
+
+      {/* Value + funnel badge side by side */}
+      <div className="flex items-end justify-between gap-1">
+        <p className="text-sm font-bold text-slate-100 tabular-nums leading-none">{value}</p>
+        {funnel && (
+          <span className={clsx(
+            'inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-md border text-[9px] font-bold tabular-nums',
+            funnel.tone === 'good'    && 'bg-emerald-500/8 border-emerald-500/18 text-emerald-400',
+            funnel.tone === 'warn'    && 'bg-amber-500/8  border-amber-500/18  text-amber-400',
+            funnel.tone === 'neutral' && 'bg-surface-raised border-surface-muted text-slate-400',
+          )}>
+            {funnel.pct}
+          </span>
+        )}
+      </div>
+      {funnel && (
+        <p className="text-[9px] text-slate-600 font-medium -mt-1">{funnel.label}</p>
+      )}
 
       {tooltip && (
         <div className={clsx(

@@ -128,6 +128,25 @@ export default function CampanhasPage() {
   const isProfit = profit >= 0
   const hasRev   = campaigns.some(c => c.revenue > 0)
 
+  // ── Taxas de funil ────────────────────────────────────────────────────────
+  const clicks    = kpis?.clicks            ?? 0
+  const checkouts = kpis?.initiateCheckouts ?? 0
+  const purchases = kpis?.purchases         ?? 0
+  const checkoutRate = clicks    > 0 ? (checkouts / clicks)    * 100 : 0
+  const purchaseRate = checkouts > 0 ? (purchases / checkouts) * 100 : 0
+
+  function fmtPct(v: number) {
+    return v === 0 ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+  }
+  function purchaseTone(v: number): 'good' | 'warn' | 'neutral' {
+    if (v === 0) return 'neutral'
+    return v >= 20 ? 'good' : v >= 10 ? 'warn' : 'neutral'
+  }
+  function checkoutTone(v: number): 'good' | 'warn' | 'neutral' {
+    if (v === 0) return 'neutral'
+    return v >= 1 ? 'good' : v >= 0.3 ? 'warn' : 'neutral'
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
       <Sidebar />
@@ -296,10 +315,20 @@ export default function CampanhasPage() {
                     tooltip="Total de cliques rastreados pelo RedTrack." />
                   <KPICard title="Compras"        value={loading ? '—' : formatNumber(kpis?.purchases ?? 0)}
                     icon={ShoppingCart} color="emerald" loading={loading}
-                    tooltip="Número de eventos do tipo Purchase (compras confirmadas)." />
+                    tooltip="Número de eventos do tipo Purchase (compras confirmadas)."
+                    funnel={loading ? undefined : {
+                      label: 'de checkouts',
+                      value: fmtPct(purchaseRate),
+                      tone:  purchaseTone(purchaseRate),
+                    }} />
                   <KPICard title="Init. Checkout" value={loading ? '—' : formatNumber(kpis?.initiateCheckouts ?? 0)}
                     icon={CreditCard}  color="cyan" loading={loading}
-                    tooltip="Usuários que iniciaram o checkout." />
+                    tooltip="Usuários que iniciaram o checkout."
+                    funnel={loading ? undefined : {
+                      label: 'dos cliques',
+                      value: fmtPct(checkoutRate),
+                      tone:  checkoutTone(checkoutRate),
+                    }} />
                 </div>
               </section>
 
