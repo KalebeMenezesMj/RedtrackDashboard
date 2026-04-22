@@ -42,15 +42,19 @@ export async function GET(req: NextRequest) {
     // ── 3. Relatório diário filtrado pelos IDs da plataforma (cache 5 min) ──────
     const dailyCacheKey = `platform:${tag}:daily:${dateRange.from}:${dateRange.to}`
     let dailyRows: RedTrackReportRow[] = cache.getDailyReport(dailyCacheKey) ?? []
+    let chartError: string | null = null
 
     if (!dailyRows.length) {
+      await new Promise(r => setTimeout(r, 600))
       try {
-        // Passa todos os IDs da plataforma como filtro — a API aceita lista separada por vírgula
         const idsParam = platformIds.join(',')
         dailyRows = await fetchDailyReport(dateRange, idsParam)
         if (dailyRows.length) cache.setDailyReport(dailyCacheKey, dailyRows)
-      } catch {
+      } catch (err) {
         dailyRows = cache.getDailyReport(dailyCacheKey, true) ?? []
+        chartError = (err as Error).message ?? 'Erro ao carregar dados do gráfico'
+        if (!dailyRows.length)
+          console.warn(`[API /platform?tag=${tag}] relatório diário indisponível:`, chartError)
       }
     }
 
@@ -120,7 +124,7 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ ok: true, kpis, chartData, campaigns, dateRange, total: platformIds.length })
+    return NextResponse.json({ ok: true, kpis, chartData, campaigns, dateRange, chartError, total: platformIds.length })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error(`[API /platform?tag=${tag}]`, message)

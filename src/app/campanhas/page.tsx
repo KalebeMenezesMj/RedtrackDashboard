@@ -83,13 +83,16 @@ export default function CampanhasPage() {
   const [chartData,        setChartData]        = useState<ChartDataPoint[]>([])
   const [campaigns,        setCampaigns]        = useState<CampaignRow[]>([])
   const [loading,          setLoading]          = useState(false)
+  const [chartLoading,     setChartLoading]     = useState(false)
   const [error,            setError]            = useState<string | null>(null)
+  const [chartError,       setChartError]       = useState<string | null>(null)
   const [apiStatus,        setApiStatus]        = useState<'connected' | 'error' | 'loading'>('loading')
   const [lastUpdate,       setLastUpdate]       = useState('')
 
   const fetchData = useCallback(async (platform: Platform, range: DateRange) => {
     setLoading(true)
     setError(null)
+    setChartError(null)
     setApiStatus('loading')
     try {
       const params = new URLSearchParams({ tag: platform.tag, from: range.from, to: range.to })
@@ -99,6 +102,7 @@ export default function CampanhasPage() {
       setKpis(json.kpis)
       if (json.chartData?.length) setChartData(json.chartData)
       if (json.campaigns?.length) setCampaigns(json.campaigns)
+      if (json.chartError) setChartError(json.chartError)
       setApiStatus('connected')
       setLastUpdate(new Date().toLocaleTimeString('pt-BR'))
     } catch (e: unknown) {
@@ -106,6 +110,23 @@ export default function CampanhasPage() {
       setApiStatus('error')
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  const retryCharts = useCallback(async (platform: Platform, range: DateRange) => {
+    setChartLoading(true)
+    setChartError(null)
+    try {
+      const params = new URLSearchParams({ tag: platform.tag, from: range.from, to: range.to })
+      const res  = await fetch(`/api/platform?${params}`)
+      const json = await res.json()
+      if (!json.ok) throw new Error(json.error ?? 'Falha')
+      if (json.chartData?.length) setChartData(json.chartData)
+      if (json.chartError) setChartError(json.chartError)
+    } catch (e: unknown) {
+      setChartError(e instanceof Error ? e.message : 'Erro desconhecido')
+    } finally {
+      setChartLoading(false)
     }
   }, [])
 
@@ -335,6 +356,27 @@ export default function CampanhasPage() {
               {/* Charts */}
               <section>
                 <SectionHeading icon={BarChart3} title="Performance" />
+
+                {/* Banner erro gráficos */}
+                {chartError && !chartLoading && chartData.length === 0 && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 mb-4 rounded-xl border border-amber-500/25 bg-amber-500/8 text-amber-300 text-xs animate-fade-in-up">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <AlertCircle size={14} className="shrink-0 text-amber-400" />
+                      <div>
+                        <p className="font-semibold text-amber-300">Gráficos indisponíveis</p>
+                        <p className="text-amber-400/70 mt-0.5 font-medium">Rate limit da API — KPIs e campanhas carregaram normalmente.</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => selected && retryCharts(selected, dateRange)}
+                      className="btn-secondary !py-1.5 !px-3 text-[11px] shrink-0 !border-amber-500/30 !text-amber-300 hover:!bg-amber-500/10"
+                    >
+                      <RefreshCw size={11} className="mr-1.5" />
+                      Recarregar gráficos
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="card p-5 lg:col-span-2">
                     <div className="flex items-start justify-between gap-3 mb-4">
@@ -351,7 +393,7 @@ export default function CampanhasPage() {
                         <LegendDot color="#818cf8" label="ROI" />
                       </div>
                     </div>
-                    <ROILineChart data={chartData} loading={loading} />
+                    <ROILineChart data={chartData} loading={loading || chartLoading} />
                   </div>
 
                   <div className="card p-5">
@@ -384,7 +426,7 @@ export default function CampanhasPage() {
                       <LegendDot color="#34d399" label="Receita" />
                     </div>
                   </div>
-                  <SpendRevenueChart data={chartData} loading={loading} />
+                  <SpendRevenueChart data={chartData} loading={loading || chartLoading} />
                 </div>
               </section>
 

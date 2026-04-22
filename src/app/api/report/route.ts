@@ -34,16 +34,20 @@ export async function GET(req: NextRequest) {
     // ── 3. Relatório diário (cache 5 min — usa stale se 429) ─────────────────
     const cacheKey = `daily:${dateRange.from}:${dateRange.to}:${campaignId ?? ''}`
     let dailyRows: RedTrackReportRow[] = cache.getDailyReport(cacheKey) ?? []
+    let chartError: string | null = null
 
     if (!dailyRows.length) {
+      // Pequena pausa para não saturar o rate limit logo após as chamadas anteriores
+      await new Promise(r => setTimeout(r, 600))
       try {
         dailyRows = await fetchDailyReport(dateRange, campaignId)
         if (dailyRows.length) cache.setDailyReport(cacheKey, dailyRows)
       } catch (err) {
-        // Rate limited — usa cache expirado se houver (melhor que vazio)
+        // Usa cache expirado se houver (melhor que vazio)
         dailyRows = cache.getDailyReport(cacheKey, true) ?? []
+        chartError = (err as Error).message ?? 'Erro ao carregar dados do gráfico'
         if (!dailyRows.length)
-          console.warn('[API /report] relatório diário indisponível:', (err as Error).message)
+          console.warn('[API /report] relatório diário indisponível:', chartError)
       }
     }
 
@@ -115,7 +119,7 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ ok: true, kpis, chartData, campaigns, dateRange })
+    return NextResponse.json({ ok: true, kpis, chartData, campaigns, dateRange, chartError })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[API /report]', message)

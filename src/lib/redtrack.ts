@@ -25,6 +25,36 @@ client.interceptors.response.use(
   },
 )
 
+// ─── Retry com backoff para rate limit (429) ─────────────────────────────────
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Executa `fn` com até `maxAttempts` tentativas.
+ * Em caso de 429 aguarda `baseDelayMs * 2^tentativa` antes de tentar novamente.
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 2000,
+): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err: unknown) {
+      lastErr = err
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined
+      // Só faz retry em 429 (rate limit) ou 503 (serviço indisponível)
+      if (status !== 429 && status !== 503) throw err
+      const delay = baseDelayMs * Math.pow(2, attempt)
+      console.warn(`[RedTrack] ${status} — aguardando ${delay}ms antes da tentativa ${attempt + 2}/${maxAttempts}`)
+      await sleep(delay)
+    }
+  }
+  throw lastErr
+}
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 export async function fetchSettings(): Promise<RedTrackSettings> {
@@ -37,10 +67,12 @@ export async function fetchSettings(): Promise<RedTrackSettings> {
 // ─── Campanhas ativas (/campaigns?status=1) ───────────────────────────────────
 
 export async function fetchActiveCampaignIds(): Promise<string[]> {
-  const { data } = await client.get<{ id: string }[]>('/campaigns', {
-    params: { api_key: API_KEY, status: 1, per: 1000 },
-  })
-  const rows = Array.isArray(data) ? data : (data as any).items ?? []
+  const { data } = await withRetry(() =>
+    client.get<{ id: string }[]>('/campaigns', {
+      params: { api_key: API_KEY, status: 1, per: 1000 },
+    })
+  )
+  const rows = Array.isArray(data) ? data : (data as { items?: { id: string }[] }).items ?? []
   return rows.map((r: { id: string }) => r.id).filter(Boolean)
 }
 
@@ -62,12 +94,12 @@ export async function fetchCampaignReport(
     params['campaign_id'] = campaignIds.join(',')
   }
 
-  const { data } = await client.get<RedTrackReportWithTotal>('/report', { params })
-  // Garante o formato esperado
+  const { data } = await withRetry(() =>
+    client.get<RedTrackReportWithTotal>('/report', { params })
+  )
   if (data && typeof data === 'object' && 'items' in data) {
     return { items: data.items ?? [], total: data.total ?? {} as RedTrackReportRow }
   }
-  // Fallback: se por algum motivo retornar array puro
   const rows = Array.isArray(data) ? data as unknown as RedTrackReportRow[] : []
   return { items: rows, total: {} as RedTrackReportRow }
 }
@@ -87,7 +119,12 @@ export async function fetchDailyReport(
   }
   if (campaignId) params['campaign_id'] = campaignId
 
-  const { data } = await client.get<RedTrackReportRow[]>('/report', { params })
+  // Retry automático em caso de 429 com backoff 2 s → 4 s → 8 s
+  const { data } = await withRetry(() =>
+    client.get<RedTrackReportRow[]>('/report', { params }),
+    3,      // max 3 tentativas
+    2000,   // delay base 2 s
+  )
   return Array.isArray(data) ? data : []
 }
 
