@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart2, Layers, LayoutDashboard, Settings, Zap,
-  HelpCircle, Sparkles, TrendingUp, LogOut,
+  HelpCircle, Sparkles, TrendingUp, LogOut, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -52,7 +52,12 @@ const NAV_GROUPS: NavGroup[] = [
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
-export default function Sidebar() {
+interface SidebarProps {
+  mobileOpen?:    boolean
+  onMobileClose?: () => void
+}
+
+export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const router   = useRouter()
 
@@ -62,9 +67,36 @@ export default function Sidebar() {
   }
 
   return (
-    /* Clean zinc-gray surface — no gradient, no blur, no atmospheric effects.
-     * The sidebar IS the darkest card-level surface; it doesn't need to float. */
-    <aside className="hidden md:flex flex-col w-60 shrink-0 bg-surface-card border-r border-surface-border relative">
+    <>
+      {/* Mobile overlay — fades behind the sidebar when open */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+
+    {/* Clean zinc-gray surface — no gradient, no blur, no atmospheric effects.
+     * The sidebar IS the darkest card-level surface; it doesn't need to float. */}
+    <aside className={clsx(
+      'flex flex-col w-60 shrink-0 bg-surface-card border-r border-surface-border',
+      // Desktop: always visible, static in flow
+      'md:relative md:translate-x-0',
+      // Mobile: fixed slide-over from left
+      'fixed inset-y-0 left-0 z-50 md:z-auto',
+      'transition-transform duration-200 ease-out',
+      mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+    )}>
+
+      {/* Close button — mobile only */}
+      <button
+        className="absolute top-3.5 right-3 md:hidden btn-icon !w-9 !h-9"
+        onClick={onMobileClose}
+        aria-label="Fechar menu"
+      >
+        <X size={15} />
+      </button>
 
       {/* ── Brand ─────────────────────────────────────────────────────────── */}
       <div className="px-4 pt-6 pb-5">
@@ -230,5 +262,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

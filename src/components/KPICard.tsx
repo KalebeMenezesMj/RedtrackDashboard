@@ -88,9 +88,9 @@ export default function KPICard({
           <Icon size={17} className={c.icon} strokeWidth={2} />
         </div>
 
-        {/* Delta chip */}
+        {/* Delta chip — hidden on mobile to save space, shown on sm+ */}
         {delta && (
-          <span className={deltaClasses}>
+          <span className={clsx(deltaClasses, 'hidden sm:inline-flex')}>
             <DeltaIcon size={10} strokeWidth={2.5} />
             <span className="leading-none">{delta.replace(/^[▲▼]\s?/, '')}</span>
           </span>
@@ -104,7 +104,7 @@ export default function KPICard({
 
       {/* Value + Funnel rate side by side */}
       <div className="flex items-end justify-between gap-2">
-        <p className="text-[1.85rem] font-bold text-slate-50 leading-none tabular-nums tracking-tight break-all">
+        <p className="text-[1.4rem] sm:text-[1.85rem] font-bold text-slate-50 leading-none tabular-nums tracking-tight break-all">
           {value}
         </p>
 

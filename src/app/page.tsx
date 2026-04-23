@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   DollarSign, TrendingUp, Activity, MousePointerClick, RefreshCw, AlertCircle,
   ShoppingCart, CreditCard, BarChart3, Layers, PieChart as PieIcon,
-  LineChart as LineIcon, LayoutDashboard, Sparkles, ArrowRight,
+  LineChart as LineIcon, LayoutDashboard, Sparkles, ArrowRight, Menu,
 } from 'lucide-react'
 import KPICard           from '@/components/KPICard'
 import DateRangePicker   from '@/components/DateRangePicker'
@@ -108,6 +108,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 /* ─── Main page ───────────────────────────────────────────────────────── */
 export default function DashboardPage() {
+  const [sidebarOpen,      setSidebarOpen]      = useState(false)
   const [dateRange,        setDateRange]        = useState<DateRange>({ from: daysAgo(30), to: today() })
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignRow | null>(null)
   const [kpis,             setKpis]             = useState<KPIData | null>(null)
@@ -195,7 +196,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
-      <Sidebar />
+      <Sidebar mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
 
       <CampaignDrawer
         campaign={selectedCampaign}
@@ -211,8 +212,16 @@ export default function DashboardPage() {
 
             {/* Left: icon + title */}
             <div className="flex items-center gap-3 min-w-0">
+              {/* Hamburger — mobile only */}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="md:hidden btn-icon !w-9 !h-9 shrink-0"
+                aria-label="Abrir menu"
+              >
+                <Menu size={16} />
+              </button>
               {/* Flat brand icon — no gradient, no shadow bloom */}
-              <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center shrink-0">
+              <div className="hidden md:flex w-8 h-8 rounded-xl bg-brand-600 items-center justify-center shrink-0">
                 <LayoutDashboard size={15} className="text-white" strokeWidth={2.5} />
               </div>
               <div className="min-w-0">

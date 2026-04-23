@@ -89,7 +89,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute right-0 top-full mt-2 w-72 z-50 animate-scale-in
+            className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-1rem)] z-50 animate-scale-in
                        rounded-xl border border-surface-muted bg-surface-card2 overflow-hidden shadow-card-raised"
           >
             {/* Header */}

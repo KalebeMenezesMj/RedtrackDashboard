@@ -124,7 +124,7 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
         )}
       >
         {/* ── Header ───────────────────────────────────────────────────── */}
-        <header className="shrink-0 px-5 pt-5 pb-5 border-b border-surface-border">
+        <header className="shrink-0 px-4 sm:px-5 pt-4 sm:pt-5 pb-4 sm:pb-5 border-b border-surface-border">
 
           <div className="relative flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
@@ -165,27 +165,27 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
                 onClick={() => campaign && fetchData(campaign.id, dateRange)}
                 disabled={loading}
                 aria-label="Atualizar"
-                className="btn-icon !w-8 !h-8"
+                className="btn-icon !w-10 !h-10 sm:!w-8 sm:!h-8"
               >
-                <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               </button>
               <button
                 onClick={onClose}
                 aria-label="Fechar"
-                className="btn-icon !w-8 !h-8 hover:!border-rose-500/30 hover:!bg-rose-500/10 hover:!text-rose-300"
+                className="btn-icon !w-10 !h-10 sm:!w-8 sm:!h-8 hover:!border-rose-500/30 hover:!bg-rose-500/10 hover:!text-rose-300"
               >
-                <X size={13} />
+                <X size={14} />
               </button>
             </div>
           </div>
 
           {/* Hero metrics */}
           {campaign && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               <div>
                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em] mb-1">Lucro no período</p>
                 <p className={clsx(
-                  'text-[1.75rem] font-black tabular-nums tracking-tight leading-none',
+                  'text-2xl sm:text-[1.75rem] font-black tabular-nums tracking-tight leading-none',
                   profitable ? 'gradient-text-emerald' : 'gradient-text-rose',
                 )}>
                   {formatCurrency(profit)}
@@ -202,7 +202,7 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
                 </p>
                 <p className="text-[10px] text-slate-600 mt-1.5 font-medium">Receita {formatCurrency(campaign.revenue)}</p>
               </div>
-              <div>
+              <div className="col-span-2 sm:col-span-1">
                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em] mb-1">Gasto total</p>
                 <p className="text-2xl font-black tabular-nums tracking-tight leading-none text-blue-400">
                   {formatCurrency(campaign.cost)}
@@ -214,7 +214,7 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
         </header>
 
         {/* ── Body ─────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5 py-4 sm:py-5 space-y-6">
 
           {/* Error */}
           {error && (
@@ -315,22 +315,26 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
             {/* Tabela de anúncios */}
             {!loading && ads !== null && ads.length > 0 && (
               <div className="rounded-xl border border-surface-border overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center px-3 py-2 bg-surface-raised border-b border-surface-border text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500 gap-2">
-                  <span className="w-7 shrink-0" />
-                  <span className="flex-1 min-w-0">Anúncio</span>
-                  <SortBtn field="cost"         label="Gasto"   active={adSort} onSort={toggleSort} className="w-[82px] justify-end" />
-                  <SortBtn field="revenue"      label="Receita" active={adSort} onSort={toggleSort} className="w-[82px] justify-end" />
-                  <SortBtn field="roi"          label="ROI"     active={adSort} onSort={toggleSort} className="w-[72px] justify-end" />
-                  <SortBtn field="purchases"    label="Compras" active={adSort} onSort={toggleSort} className="w-[68px] justify-end" />
-                  <SortBtn field="purchaseRate" label="Conv%"   active={adSort} onSort={toggleSort} className="w-[68px] justify-end" />
-                  <SortBtn field="checkoutRate" label="CK%"     active={adSort} onSort={toggleSort} className="w-[60px] justify-end" />
-                </div>
-                {/* Rows */}
-                <div className="divide-y divide-surface-border/60">
-                  {sortedAds.map((ad, idx) => (
-                    <AdTableRow key={ad.id} ad={ad} rank={idx + 1} />
-                  ))}
+                <div className="overflow-x-auto">
+                  <div className="min-w-[580px]">
+                    {/* Header */}
+                    <div className="flex items-center px-3 py-2 bg-surface-raised border-b border-surface-border text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500 gap-2">
+                      <span className="w-7 shrink-0" />
+                      <span className="flex-1 min-w-0">Anúncio</span>
+                      <SortBtn field="cost"         label="Gasto"   active={adSort} onSort={toggleSort} className="w-[82px] justify-end" />
+                      <SortBtn field="revenue"      label="Receita" active={adSort} onSort={toggleSort} className="w-[82px] justify-end" />
+                      <SortBtn field="roi"          label="ROI"     active={adSort} onSort={toggleSort} className="w-[72px] justify-end" />
+                      <SortBtn field="purchases"    label="Compras" active={adSort} onSort={toggleSort} className="w-[68px] justify-end" />
+                      <SortBtn field="purchaseRate" label="Conv%"   active={adSort} onSort={toggleSort} className="w-[68px] justify-end" />
+                      <SortBtn field="checkoutRate" label="CK%"     active={adSort} onSort={toggleSort} className="w-[60px] justify-end" />
+                    </div>
+                    {/* Rows */}
+                    <div className="divide-y divide-surface-border/60">
+                      {sortedAds.map((ad, idx) => (
+                        <AdTableRow key={ad.id} ad={ad} rank={idx + 1} />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -372,11 +376,14 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
 
           {/* Footer hint */}
           <p className="text-center text-[10px] text-slate-600 font-medium pt-2 pb-4">
-            Pressione{' '}
-            <kbd className="px-1.5 py-0.5 rounded-md bg-surface-border border border-surface-muted text-slate-400 font-mono text-[9px] mx-0.5">
-              ESC
-            </kbd>{' '}
-            para fechar
+            <span className="hidden sm:inline">
+              Pressione{' '}
+              <kbd className="px-1.5 py-0.5 rounded-md bg-surface-border border border-surface-muted text-slate-400 font-mono text-[9px] mx-0.5">
+                ESC
+              </kbd>{' '}
+              para fechar
+            </span>
+            <span className="sm:hidden">Toque fora para fechar</span>
           </p>
         </div>
       </aside>

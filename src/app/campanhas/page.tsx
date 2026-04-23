@@ -5,7 +5,7 @@ import Image from 'next/image'
 import {
   ArrowLeft, DollarSign, TrendingUp, Activity, MousePointerClick, RefreshCw,
   AlertCircle, ShoppingCart, CreditCard, ChevronRight, BarChart3, Layers,
-  PieChart as PieIcon, LineChart as LineIcon, Sparkles, Globe2,
+  PieChart as PieIcon, LineChart as LineIcon, Sparkles, Globe2, Menu,
 } from 'lucide-react'
 import KPICard           from '@/components/KPICard'
 import DateRangePicker   from '@/components/DateRangePicker'
@@ -76,6 +76,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 /* ─── Page ─────────────────────────────────────────────────────────────────── */
 
 export default function CampanhasPage() {
+  const [sidebarOpen,      setSidebarOpen]      = useState(false)
   const [selected,         setSelected]         = useState<Platform | null>(null)
   const [dateRange,        setDateRange]        = useState<DateRange>({ from: daysAgo(30), to: today() })
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignRow | null>(null)
@@ -170,7 +171,7 @@ export default function CampanhasPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
-      <Sidebar />
+      <Sidebar mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
 
       {selected && (
         <CampaignDrawer
@@ -186,6 +187,16 @@ export default function CampanhasPage() {
         <header className="sticky top-0 z-40 bg-surface-card/95 border-b border-surface-border backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4 flex-wrap px-5 sm:px-6 py-4 max-w-screen-2xl mx-auto">
             <div className="flex items-center gap-3 min-w-0">
+              {/* Hamburger — mobile only, shown when no platform is selected */}
+              {!selected && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden btn-icon !w-9 !h-9 shrink-0"
+                  aria-label="Abrir menu"
+                >
+                  <Menu size={16} />
+                </button>
+              )}
               {selected ? (
                 <button
                   onClick={handleBack}
@@ -195,7 +206,7 @@ export default function CampanhasPage() {
                   <ArrowLeft size={14} />
                 </button>
               ) : (
-                <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shrink-0">
+                <div className="hidden md:flex w-9 h-9 rounded-xl bg-brand-600 items-center justify-center shrink-0">
                   <Globe2 size={16} className="text-white" strokeWidth={2.5} />
                 </div>
               )}
