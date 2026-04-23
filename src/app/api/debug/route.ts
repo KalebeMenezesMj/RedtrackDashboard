@@ -6,106 +6,109 @@ const KEY  = process.env.REDTRACK_API_KEY ?? ''
 
 export async function GET() {
   const to   = fmtDate(new Date())
-  const from = fmtDate(subDays(new Date(), 30))
+  const from = fmtDate(subDays(new Date(), 7))  // só 7 dias para economizar RPM
 
   const out: Record<string, unknown> = {}
 
-  // ── 1. Relatório por campanha — ver TODOS os campos retornados ────────────
+  // ── 1. Relatório por campanha ────────────────────────────────────────────
   try {
     const r = await axios.get(`${BASE}/report`, {
-      params: { api_key: KEY, date_from: from, date_to: to, group: 'campaign', total: true, per: 5 },
+      params: { api_key: KEY, date_from: from, date_to: to, group: 'campaign', total: true, per: 3 },
       timeout: 15_000,
     })
-    const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
-    const total = r.data?.total ?? null
+    const rows  = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
+    const first = rows[0]
     out.campaign_report = {
-      total_row: total,
-      all_keys_in_first_row: rows[0] ? Object.keys(rows[0]) : [],
-      // Mostra todos os campos com valor != 0 da primeira linha
-      non_zero_fields: rows[0]
-        ? Object.fromEntries(Object.entries(rows[0]).filter(([, v]) => v !== 0 && v !== null && v !== '' && v !== undefined))
+      http_status: r.status,
+      all_keys: first ? Object.keys(first) : [],
+      non_zero_fields: first
+        ? Object.fromEntries(Object.entries(first).filter(([, v]) => v !== 0 && v !== null && v !== ''))
         : null,
-      // Campos de receita especificamente
-      revenue_fields: rows[0]
-        ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) =>
-            k.toLowerCase().includes('revenue') ||
-            k.toLowerCase().includes('payout') ||
-            k.toLowerCase().includes('income') ||
-            k.toLowerCase().includes('profit') ||
-            k.toLowerCase().includes('goal') ||
-            k.toLowerCase().includes('conv')
-          ))
-        : null,
-      first_3_rows: rows.slice(0, 3),
+      first_campaign_id: first?.campaign_id ?? null,
     }
   } catch (e: unknown) {
     const err = e as { response?: { status: number; data: unknown }; message?: string }
-    out.campaign_report = { error: err?.response?.data ?? err?.message }
+    out.campaign_report = { http_status: err?.response?.status, error: err?.response?.data ?? err?.message }
   }
 
-  // ── 2. Conversões individuais — ver se têm payout/revenue ────────────────
+  // ── 2. Testar group=ad ────────────────────────────────────────────────────
+  // Pega o primeiro campaign_id do resultado anterior para filtrar
+  const firstCampaignId = (out.campaign_report as Record<string,unknown>)?.first_campaign_id as string | null
+
+  const adGroups = ['ad', 'creative', 'banner', 'sub1', 'sub2']
+  const adGroupResults: Record<string, unknown> = {}
+
+  for (const grp of adGroups) {
+    try {
+      const params: Record<string, unknown> = {
+        api_key:   KEY,
+        date_from: from,
+        date_to:   to,
+        group:     grp,
+        per:       3,
+      }
+      if (firstCampaignId) params['campaign_id'] = firstCampaignId
+
+      const r = await axios.get(`${BASE}/report`, { params, timeout: 10_000 })
+      const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
+      adGroupResults[grp] = {
+        ok:         true,
+        http_status: r.status,
+        row_count:  rows.length,
+        all_keys:   rows[0] ? Object.keys(rows[0]) : [],
+        first_row:  rows[0] ?? null,
+      }
+    } catch (e: unknown) {
+      const err = e as { response?: { status: number; data: unknown }; message?: string }
+      adGroupResults[grp] = {
+        ok:         false,
+        http_status: err?.response?.status ?? 0,
+        error:      err?.response?.data ?? err?.message,
+      }
+    }
+    // Pequena pausa entre testes para não bater rate limit
+    await new Promise(r => setTimeout(r, 500))
+  }
+
+  out.ad_group_tests = adGroupResults
+
+  // ── 3. Testar endpoint /ads direto ────────────────────────────────────────
   try {
-    const r = await axios.get(`${BASE}/conversions`, {
-      params: { api_key: KEY, date_from: from, date_to: to, per: 3 },
-      timeout: 15_000,
+    const r = await axios.get(`${BASE}/ads`, {
+      params: { api_key: KEY, per: 3 },
+      timeout: 10_000,
     })
     const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
-    out.conversions = {
-      count: rows.length,
-      all_keys: rows[0] ? Object.keys(rows[0]) : [],
-      revenue_fields: rows[0]
-        ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) =>
-            k.toLowerCase().includes('revenue') ||
-            k.toLowerCase().includes('payout') ||
-            k.toLowerCase().includes('income')
-          ))
-        : null,
-      first_row: rows[0] ?? null,
+    out.ads_endpoint = {
+      http_status: r.status,
+      row_count:   rows.length,
+      all_keys:    rows[0] ? Object.keys(rows[0]) : [],
+      first_row:   rows[0] ?? null,
     }
   } catch (e: unknown) {
     const err = e as { response?: { status: number; data: unknown }; message?: string }
-    out.conversions = { error: err?.response?.data ?? err?.message }
+    out.ads_endpoint = { http_status: err?.response?.status, error: err?.response?.data ?? err?.message }
   }
 
-  // ── 3. Relatório diário — ver se revenue aparece por data ────────────────
+  // ── 4. Relatório diário ───────────────────────────────────────────────────
   try {
     const r = await axios.get(`${BASE}/report`, {
-      params: { api_key: KEY, date_from: from, date_to: to, group: 'date', per: 5 },
+      params: { api_key: KEY, date_from: from, date_to: to, group: 'date', per: 3 },
       timeout: 15_000,
     })
     const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
     out.daily_report = {
-      // Soma de revenue em todos os dias
-      total_revenue_sum: rows.reduce((s: number, r: Record<string, number>) => s + (r.revenue ?? 0), 0),
-      total_cost_sum:    rows.reduce((s: number, r: Record<string, number>) => s + (r.cost ?? 0), 0),
-      first_3_rows: rows.slice(0, 3),
+      http_status: r.status,
+      row_count:   rows.length,
+      revenue_fields: rows[0]
+        ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) =>
+            k.toLowerCase().includes('revenue') || k.toLowerCase().includes('profit')
+          ))
+        : null,
     }
   } catch (e: unknown) {
     const err = e as { response?: { status: number; data: unknown }; message?: string }
-    out.daily_report = { error: err?.response?.data ?? err?.message }
-  }
-
-  // ── 4. Goals/Offers — checar configuração de payout ──────────────────────
-  try {
-    const r = await axios.get(`${BASE}/offers`, {
-      params: { api_key: KEY, per: 5 },
-      timeout: 15_000,
-    })
-    const rows = Array.isArray(r.data) ? r.data : (r.data?.items ?? [])
-    out.offers = {
-      count: rows.length,
-      payout_fields: rows.slice(0, 3).map((o: Record<string, unknown>) =>
-        Object.fromEntries(Object.entries(o).filter(([k]) =>
-          k.toLowerCase().includes('payout') ||
-          k.toLowerCase().includes('revenue') ||
-          k.toLowerCase().includes('goal') ||
-          k === 'name' || k === 'id'
-        ))
-      ),
-    }
-  } catch (e: unknown) {
-    const err = e as { response?: { status: number; data: unknown }; message?: string }
-    out.offers = { error: err?.response?.data ?? err?.message }
+    out.daily_report = { http_status: err?.response?.status, error: err?.response?.data ?? err?.message }
   }
 
   return NextResponse.json(out, { status: 200 })

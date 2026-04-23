@@ -9,6 +9,20 @@ export interface RedTrackReportRow {
   campaign_id?: string
   campaign?:    string   // nome da campanha quando group=campaign
   date?:        string   // quando group=date (YYYY-MM-DD)
+  ad_id?:       string   // quando group=ad (rate-limited)
+  ad?:          string   // nome do anúncio quando group=ad
+  // sub params — sub2 = ad_id da plataforma (Facebook Ad ID etc.)
+  sub1?:        string
+  sub2?:        string
+  sub3?:        string
+
+  // RT params — campos nativos do RedTrack (disponíveis nos logs e em group=rt_*)
+  rt_campaign?:    string   // nome da campanha RT (ex: "CP04 - [FB] [HA] [BM7/CA5]")
+  rt_campaign_id?: string
+  rt_adgroup?:     string   // nome do adgroup RT
+  rt_adgroup_id?:  string
+  rt_ad?:          string   // nome do anúncio RT — group=rt_ad retorna este campo
+  rt_ad_id?:       string   // ID interno do anúncio RT
 
   // Métricas principais
   clicks:       number
@@ -87,6 +101,28 @@ export interface CampaignRow {
 
 export type SortField = keyof CampaignRow
 export type SortDir   = 'asc' | 'desc'
+
+// ─── Ad-level breakdown (dentro de uma campanha) ──────────────────────────────
+
+export interface AdRow {
+  id:                string
+  name:              string
+  clicks:            number
+  impressions:       number
+  cost:              number
+  revenue:           number
+  profit:            number
+  roi:               number
+  ctr:               number   // click-through rate %
+  cr:                number   // conversion rate %
+  cpc:               number   // custo por clique
+  cpa:               number   // custo por aquisição
+  conversions:       number
+  purchases:         number   // convtype1
+  initiateCheckouts: number   // convtype2
+  purchaseRate:      number   // compras / checkouts %
+  checkoutRate:      number   // checkouts / cliques %
+}
 
 export interface ReportFilters {
   dateRange:  DateRange

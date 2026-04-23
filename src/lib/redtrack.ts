@@ -128,6 +128,47 @@ export async function fetchDailyReport(
   return Array.isArray(data) ? data : []
 }
 
+// ─── Report por anúncio ───────────────────────────────────────────────────────
+// Usa group=rt_ad → campo `rt_ad` contém o nome real do anúncio no RedTrack
+// (ex: "CP04 - [FB] [HA] [BM7/CA5]"), campo `rt_ad_id` contém o ID interno.
+// Fallback: group=sub2 → campo `sub2` contém o Ad ID da plataforma (ex: "120242...").
+
+export async function fetchAdReport(
+  dateRange: DateRange,
+  campaignId: string,
+): Promise<RedTrackReportRow[]> {
+  const baseParams: Record<string, unknown> = {
+    api_key:     API_KEY,
+    date_from:   dateRange.from,
+    date_to:     dateRange.to,
+    campaign_id: campaignId,
+    per:         1000,
+  }
+
+  // 1ª tentativa: group=rt_ad → nome real do anúncio no RedTrack
+  try {
+    const { data } = await withRetry(
+      () => client.get<RedTrackReportRow[]>('/report', { params: { ...baseParams, group: 'rt_ad' } }),
+      3,
+      3000,
+    )
+    const rows = Array.isArray(data) ? data : ((data as { items?: RedTrackReportRow[] }).items ?? [])
+    if (rows.length > 0) return rows
+  } catch (err: unknown) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined
+    if (status !== 429 && status !== 503) throw err
+    console.warn('[RedTrack] group=rt_ad esgotou retries (429) — usando fallback group=sub2')
+  }
+
+  // Fallback: group=sub2 → Ad ID da plataforma
+  const { data } = await withRetry(
+    () => client.get<RedTrackReportRow[]>('/report', { params: { ...baseParams, group: 'sub2' } }),
+    3,
+    2000,
+  )
+  return Array.isArray(data) ? data : ((data as { items?: RedTrackReportRow[] }).items ?? [])
+}
+
 // ─── Campanhas por tag de plataforma ─────────────────────────────────────────
 
 /**
