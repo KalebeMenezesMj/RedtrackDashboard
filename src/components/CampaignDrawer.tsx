@@ -116,7 +116,7 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
         aria-modal="true"
         aria-label="Detalhes da campanha"
         className={clsx(
-          'fixed top-0 right-0 h-full w-full max-w-2xl z-50 flex flex-col',
+          'fixed top-0 right-0 h-full w-full max-w-[960px] z-50 flex flex-col',
           'bg-surface-card border-l border-surface-border',
           'transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
           'shadow-drawer',
@@ -315,15 +315,18 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
             {/* Tabela de anúncios */}
             {!loading && ads !== null && ads.length > 0 && (
               <div className="rounded-xl border border-surface-border overflow-hidden">
-                <div className="grid grid-cols-[1fr_repeat(6,auto)] gap-x-3 px-3 py-2 bg-surface-raised border-b border-surface-border text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
-                  <span>Anúncio</span>
-                  <SortBtn field="cost"         label="Gasto"   active={adSort} onSort={toggleSort} />
-                  <SortBtn field="revenue"      label="Receita" active={adSort} onSort={toggleSort} />
-                  <SortBtn field="roi"          label="ROI"     active={adSort} onSort={toggleSort} />
-                  <SortBtn field="purchases"    label="Compras" active={adSort} onSort={toggleSort} />
-                  <SortBtn field="purchaseRate" label="Conv%"   active={adSort} onSort={toggleSort} />
-                  <SortBtn field="checkoutRate" label="CK%"     active={adSort} onSort={toggleSort} />
+                {/* Header */}
+                <div className="flex items-center px-3 py-2 bg-surface-raised border-b border-surface-border text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500 gap-2">
+                  <span className="w-7 shrink-0" />
+                  <span className="flex-1 min-w-0">Anúncio</span>
+                  <SortBtn field="cost"         label="Gasto"   active={adSort} onSort={toggleSort} className="w-[82px] justify-end" />
+                  <SortBtn field="revenue"      label="Receita" active={adSort} onSort={toggleSort} className="w-[82px] justify-end" />
+                  <SortBtn field="roi"          label="ROI"     active={adSort} onSort={toggleSort} className="w-[72px] justify-end" />
+                  <SortBtn field="purchases"    label="Compras" active={adSort} onSort={toggleSort} className="w-[68px] justify-end" />
+                  <SortBtn field="purchaseRate" label="Conv%"   active={adSort} onSort={toggleSort} className="w-[68px] justify-end" />
+                  <SortBtn field="checkoutRate" label="CK%"     active={adSort} onSort={toggleSort} className="w-[60px] justify-end" />
                 </div>
+                {/* Rows */}
                 <div className="divide-y divide-surface-border/60">
                   {sortedAds.map((ad, idx) => (
                     <AdTableRow key={ad.id} ad={ad} rank={idx + 1} />
@@ -387,34 +390,34 @@ function AdTableRow({ ad, rank }: { ad: AdRow; rank: number }) {
   const hasRev     = ad.revenue > 0
 
   return (
-    <div className="grid grid-cols-[1fr_repeat(6,auto)] gap-x-3 items-center px-3 py-2.5 hover:bg-surface-raised/40 transition-colors">
-      {/* Name + rank */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={clsx(
-          'shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black border',
-          rank === 1 && 'bg-amber-500/15 border-amber-500/25 text-amber-400',
-          rank === 2 && 'bg-slate-500/10 border-slate-500/20 text-slate-400',
-          rank === 3 && 'bg-orange-500/10 border-orange-500/20 text-orange-400',
-          rank  > 3  && 'bg-surface-raised border-surface-muted text-slate-600',
-        )}>
-          {rank}
-        </span>
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-slate-200 truncate" title={ad.name}>
-            {ad.name || `Ad ${rank}`}
-          </p>
-          <p className="text-[9px] text-slate-600 font-mono truncate">{ad.id.slice(0, 16)}…</p>
-        </div>
+    <div className="flex items-center px-3 py-2.5 gap-2 hover:bg-surface-raised/40 transition-colors">
+      {/* Rank badge */}
+      <span className={clsx(
+        'shrink-0 w-7 h-5 rounded-md flex items-center justify-center text-[9px] font-black border',
+        rank === 1 && 'bg-amber-500/15 border-amber-500/25 text-amber-400',
+        rank === 2 && 'bg-slate-500/10 border-slate-500/20 text-slate-400',
+        rank === 3 && 'bg-orange-500/10 border-orange-500/20 text-orange-400',
+        rank  > 3  && 'bg-surface-raised border-surface-muted text-slate-600',
+      )}>
+        {rank}
+      </span>
+
+      {/* Name */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-semibold text-slate-200 truncate" title={ad.name}>
+          {ad.name || `Ad ${rank}`}
+        </p>
+        <p className="text-[9px] text-slate-600 font-mono truncate">{ad.id.slice(0, 20)}…</p>
       </div>
 
       {/* Gasto */}
-      <span className="text-[11px] font-semibold text-blue-400 tabular-nums text-right whitespace-nowrap">
+      <span className="w-[82px] text-[11px] font-semibold text-blue-400 tabular-nums text-right whitespace-nowrap shrink-0">
         {formatCurrency(ad.cost)}
       </span>
 
       {/* Receita */}
       <span className={clsx(
-        'text-[11px] font-semibold tabular-nums text-right whitespace-nowrap',
+        'w-[82px] text-[11px] font-semibold tabular-nums text-right whitespace-nowrap shrink-0',
         hasRev ? 'text-emerald-400' : 'text-slate-600',
       )}>
         {hasRev ? formatCurrency(ad.revenue) : '—'}
@@ -422,7 +425,7 @@ function AdTableRow({ ad, rank }: { ad: AdRow; rank: number }) {
 
       {/* ROI */}
       <span className={clsx(
-        'text-[11px] font-bold tabular-nums text-right whitespace-nowrap',
+        'w-[72px] text-[11px] font-bold tabular-nums text-right whitespace-nowrap shrink-0',
         profitable ? 'text-brand-300' : 'text-rose-400',
       )}>
         {hasRev ? formatROI(ad.roi) : '—'}
@@ -430,17 +433,21 @@ function AdTableRow({ ad, rank }: { ad: AdRow; rank: number }) {
 
       {/* Compras */}
       <span className={clsx(
-        'text-[11px] font-semibold tabular-nums text-right whitespace-nowrap',
+        'w-[68px] text-[11px] font-semibold tabular-nums text-right whitespace-nowrap shrink-0',
         ad.purchases > 0 ? 'text-emerald-400' : 'text-slate-600',
       )}>
         {ad.purchases > 0 ? formatNumber(ad.purchases) : '—'}
       </span>
 
-      {/* Taxa compra */}
-      <FunnelBadge value={ad.purchaseRate} thresholds={[20, 10]} />
+      {/* Conv% (purchase rate) */}
+      <div className="w-[68px] flex justify-end shrink-0">
+        <FunnelBadge value={ad.purchaseRate} thresholds={[20, 10]} />
+      </div>
 
-      {/* Taxa checkout */}
-      <FunnelBadge value={ad.checkoutRate} thresholds={[1, 0.3]} />
+      {/* CK% (checkout rate) */}
+      <div className="w-[60px] flex justify-end shrink-0">
+        <FunnelBadge value={ad.checkoutRate} thresholds={[1, 0.3]} />
+      </div>
     </div>
   )
 }
@@ -463,20 +470,22 @@ function FunnelBadge({ value, thresholds }: { value: number; thresholds: [number
 
 /* ─── Sort button ─────────────────────────────────────────────────────── */
 function SortBtn({
-  field, label, active, onSort,
+  field, label, active, onSort, className,
 }: {
   field: AdSortField
   label: string
   active: { field: AdSortField; dir: 'asc' | 'desc' }
   onSort: (f: AdSortField) => void
+  className?: string
 }) {
   const isActive = active.field === field
   return (
     <button
       onClick={() => onSort(field)}
       className={clsx(
-        'inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-colors whitespace-nowrap',
+        'inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-colors whitespace-nowrap shrink-0',
         isActive ? 'text-brand-300' : 'text-slate-500 hover:text-slate-300',
+        className,
       )}
     >
       {label}
