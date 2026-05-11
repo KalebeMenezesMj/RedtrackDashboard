@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart2, Layers, LayoutDashboard, Settings, Zap,
-  HelpCircle, Sparkles, TrendingUp, LogOut, X,
+  HelpCircle, Sparkles, TrendingUp, LogOut, X, Activity, BarChart3,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -27,10 +27,22 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Analytics',
+    label: 'Visão Geral',
     items: [
-      { icon: LayoutDashboard, label: 'Painel',            href: '/',                  accent: 'text-brand-400' },
-      { icon: BarChart2,       label: 'Campanhas',         href: '/campanhas',         accent: 'text-blue-400' },
+      { icon: LayoutDashboard, label: 'Painel Geral',      href: '/',                  accent: 'text-brand-400' },
+    ],
+  },
+  {
+    label: 'Plataformas',
+    items: [
+      { icon: BarChart3,       label: 'RedTrack',              href: '/redtrack',             accent: 'text-blue-400'    },
+      { icon: Activity,        label: 'UTMify',                href: '/utmify',               accent: 'text-emerald-400' },
+    ],
+  },
+  {
+    label: 'Campanhas',
+    items: [
+      { icon: BarChart2,       label: 'Por Plataforma',    href: '/campanhas',         accent: 'text-sky-400' },
       { icon: Layers,          label: 'Análise Criativos', href: '/analise-criativos', accent: 'text-violet-400' },
     ],
   },
