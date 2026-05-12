@@ -1,7 +1,7 @@
 // ─── Number Formatting Utilities ─────────────────────────────────────────────
 
-export function formatCurrency(value: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(value: number, currency = 'BRL'): string {
+  return new Intl.NumberFormat('pt-BR', {
     style:                 'currency',
     currency,
     minimumFractionDigits: 2,
@@ -14,7 +14,7 @@ export function formatPercent(value: number, decimals = 2): string {
 }
 
 export function formatNumber(value: number, decimals = 0): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('pt-BR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value)

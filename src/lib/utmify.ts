@@ -101,6 +101,72 @@ async function getToken(): Promise<string> {
   return login()
 }
 
+// ─── Payment-method parser ────────────────────────────────────────────────────
+// A API pode retornar percentuais em várias estruturas; este helper tenta todas.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolvePaymentMethods(d: any, netRev: number): {
+  cardPct: number; pixPct: number; boletoPct: number
+  parsePayment: (obj: unknown, pct: number) => { revenue: number; count: number; pct: number }
+} {
+  const c2r = (v: unknown) => typeof v === 'number' ? v / 100 : 0
+
+  // Tenta 1: statistics.revenuePercByPaymentMethod {CREDIT_CARD: 0.9, PIX: 0.08, ...}
+  const percMap: Record<string, number> = d.statistics?.revenuePercByPaymentMethod ?? {}
+  let cardPct   = (percMap['CREDIT_CARD'] ?? percMap['card']   ?? percMap['CARTAO'] ?? -1)
+  let pixPct    = (percMap['PIX']         ?? percMap['pix']    ?? -1)
+  let boletoPct = (percMap['BOLETO']      ?? percMap['boleto'] ?? -1)
+
+  // Se os valores parecem ser 0-100 (não decimais), mantém; se 0-1, multiplica por 100
+  const asRaw = (v: number) => v > 1 ? v : v * 100
+
+  if (cardPct   >= 0) cardPct   = asRaw(cardPct)
+  if (pixPct    >= 0) pixPct    = asRaw(pixPct)
+  if (boletoPct >= 0) boletoPct = asRaw(boletoPct)
+
+  // Tenta 2: derivar de statistics.card.count / pix.count / boleto.count
+  if (cardPct < 0 || pixPct < 0 || boletoPct < 0) {
+    const cardCount   = (d.statistics?.card?.count   ?? d.statistics?.card?.total   ?? 0) as number
+    const pixCount    = (d.statistics?.pix?.count    ?? d.statistics?.pix?.total    ?? 0) as number
+    const boletoCount = (d.statistics?.boleto?.count ?? d.statistics?.boleto?.total ?? 0) as number
+    const totalPay    = cardCount + pixCount + boletoCount
+
+    if (totalPay > 0) {
+      if (cardPct   < 0) cardPct   = (cardCount   / totalPay) * 100
+      if (pixPct    < 0) pixPct    = (pixCount    / totalPay) * 100
+      if (boletoPct < 0) boletoPct = (boletoCount / totalPay) * 100
+    }
+  }
+
+  // Tenta 3: derivar de ordersCount
+  if (cardPct < 0 || (cardPct === 0 && pixPct === 0 && boletoPct === 0)) {
+    const ccOrders    = (d.ordersCount?.totalCreditCard ?? d.ordersCount?.approvedCreditCard ?? 0) as number
+    const totalOrders = (d.ordersCount?.approved ?? d.ordersCount?.total ?? 0) as number
+    if (totalOrders > 0 && ccOrders > 0) {
+      cardPct   = (ccOrders / totalOrders) * 100
+      pixPct    = 0
+      boletoPct = 0
+    }
+  }
+
+  if (cardPct   < 0) cardPct   = 0
+  if (pixPct    < 0) pixPct    = 0
+  if (boletoPct < 0) boletoPct = 0
+
+  const parsePayment = (obj: unknown, pct: number) => {
+    if (obj && typeof obj === 'object') {
+      const o = obj as Record<string, unknown>
+      return {
+        revenue: c2r(o.revenue ?? o.totalRevenue ?? o.net),
+        count:   typeof o.count === 'number' ? o.count : typeof o.total === 'number' ? o.total : 0,
+        pct,
+      }
+    }
+    return { revenue: netRev * (pct / 100), count: 0, pct }
+  }
+
+  return { cardPct, pixPct, boletoPct, parsePayment }
+}
+
 function reqHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
@@ -274,32 +340,8 @@ export async function fetchDashboardInfo(
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const c2r = (v: unknown) => typeof v === 'number' ? v / 100 : 0
-
-  // ── Formas de pagamento ──────────────────────────────────────────────────────
-  // statistics.revenuePercByPaymentMethod pode ser {CREDIT_CARD: 0.9, PIX: 0.08, BOLETO: 0.02}
-  const percMap: Record<string, number> = d.statistics?.revenuePercByPaymentMethod ?? {}
-  const cardPct   = (percMap['CREDIT_CARD'] ?? percMap['card']   ?? 0) * 100
-  const pixPct    = (percMap['PIX']         ?? percMap['pix']    ?? 0) * 100
-  const boletoPct = (percMap['BOLETO']      ?? percMap['boleto'] ?? 0) * 100
-  const netRev    = c2r(d.comissions?.net)
-
-  // statistics.card / .pix / .boleto podem ter revenue (centavos) ou count
-  const parsePayment = (
-    obj: unknown,
-    pct: number,
-  ): UTMifyPaymentMethod => {
-    if (obj && typeof obj === 'object') {
-      const o = obj as Record<string, unknown>
-      return {
-        revenue: c2r(o.revenue ?? o.totalRevenue ?? o.net),
-        count:   typeof o.count === 'number' ? o.count
-               : typeof o.total === 'number' ? o.total
-               : 0,
-        pct,
-      }
-    }
-    return { revenue: netRev * (pct / 100), count: 0, pct }
-  }
+  const netRev = c2r(d.comissions?.net)
+  const { cardPct, pixPct, boletoPct, parsePayment } = resolvePaymentMethods(d, netRev)
 
   // ── Distribuições ────────────────────────────────────────────────────────────
   const byHour: UTMifyHourPoint[] = (d.ordersCount?.byHour ?? []).map(
@@ -308,10 +350,14 @@ export async function fetchDashboardInfo(
   const byDayOfWeek: UTMifyDowPoint[] = (d.ordersCount?.byDayOfWeek ?? []).map(
     (x: { dayOfWeek: number; count: number }) => ({ dayOfWeek: x.dayOfWeek, count: x.count }),
   )
-  const topUtmSources: UTMifySourcePoint[] = (d.ordersCount?.byUtmSource ?? [])
-    .filter((x: { utmSource: string | null }) => x.utmSource)
-    .slice(0, 20)
-    .map((x: { utmSource: string; count: number }) => ({ source: x.utmSource, count: x.count }))
+  // byUtmSource: se vazio, usa bySrc como fallback
+  const rawSrc = (d.ordersCount?.byUtmSource ?? []).filter((x: { utmSource: string | null }) => x.utmSource)
+  const topUtmSources: UTMifySourcePoint[] = (rawSrc.length
+    ? rawSrc.map((x: { utmSource: string; count: number }) => ({ source: x.utmSource, count: x.count }))
+    : (d.ordersCount?.bySrc ?? [])
+        .filter((x: { src: string | null }) => x.src)
+        .map((x: { src: string; count: number }) => ({ source: x.src, count: x.count }))
+  ).slice(0, 20)
 
   const topUtmMediums: UTMifySourcePoint[] = (d.ordersCount?.byUtmMedium ?? [])
     .filter((x: { utmMedium: string | null }) => x.utmMedium)
@@ -345,7 +391,12 @@ export async function fetchDashboardInfo(
       revenue: c2r(p.revenue),
     }))
 
-  const profitByHour: UTMifyHourlyProfit[] = (d.profitByHourNet ?? []).map(
+  // profitByHourNet preferido; fallback para profitByHourGross se vazio
+  const rawProfitHour: { hour: number; value: number }[] =
+    (d.profitByHourNet?.length ? d.profitByHourNet : null)
+    ?? (d.profitByHourGross?.length ? d.profitByHourGross : null)
+    ?? []
+  const profitByHour: UTMifyHourlyProfit[] = rawProfitHour.map(
     (h: { hour: number; value: number }) => ({ hour: h.hour, profit: c2r(h.value) }),
   )
 
@@ -567,32 +618,19 @@ export async function fetchDashboardInfoFiltered(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d: any = await res.json()
   const c2r    = (v: unknown) => typeof v === 'number' ? v / 100 : 0
-
-  const percMap: Record<string, number> = d.statistics?.revenuePercByPaymentMethod ?? {}
-  const cardPct   = (percMap['CREDIT_CARD'] ?? percMap['card']   ?? 0) * 100
-  const pixPct    = (percMap['PIX']         ?? percMap['pix']    ?? 0) * 100
-  const boletoPct = (percMap['BOLETO']      ?? percMap['boleto'] ?? 0) * 100
-  const netRev    = c2r(d.comissions?.net)
-
-  const parsePayment = (obj: unknown, pct: number) => {
-    if (obj && typeof obj === 'object') {
-      const o = obj as Record<string, unknown>
-      return {
-        revenue: c2r(o.revenue ?? o.totalRevenue ?? o.net),
-        count:   typeof o.count === 'number' ? o.count : typeof o.total === 'number' ? o.total : 0,
-        pct,
-      }
-    }
-    return { revenue: netRev * (pct / 100), count: 0, pct }
-  }
+  const netRev = c2r(d.comissions?.net)
+  const { cardPct, pixPct, boletoPct, parsePayment } = resolvePaymentMethods(d, netRev)
 
   const byHour: UTMifyHourPoint[]    = (d.ordersCount?.byHour ?? []).map((h: { hour: number; count: number }) => ({ hour: h.hour, count: h.count }))
   const byDayOfWeek: UTMifyDowPoint[] = (d.ordersCount?.byDayOfWeek ?? []).map((x: { dayOfWeek: number; count: number }) => ({ dayOfWeek: x.dayOfWeek, count: x.count }))
 
-  const topUtmSources: UTMifySourcePoint[] = (d.ordersCount?.byUtmSource ?? [])
-    .filter((x: { utmSource: string | null }) => x.utmSource)
-    .slice(0, 20)
-    .map((x: { utmSource: string; count: number }) => ({ source: x.utmSource, count: x.count }))
+  const rawSrcF = (d.ordersCount?.byUtmSource ?? []).filter((x: { utmSource: string | null }) => x.utmSource)
+  const topUtmSources: UTMifySourcePoint[] = (rawSrcF.length
+    ? rawSrcF.map((x: { utmSource: string; count: number }) => ({ source: x.utmSource, count: x.count }))
+    : (d.ordersCount?.bySrc ?? [])
+        .filter((x: { src: string | null }) => x.src)
+        .map((x: { src: string; count: number }) => ({ source: x.src, count: x.count }))
+  ).slice(0, 20)
 
   const topUtmMediums: UTMifySourcePoint[] = (d.ordersCount?.byUtmMedium ?? [])
     .filter((x: { utmMedium: string | null }) => x.utmMedium)
@@ -626,7 +664,11 @@ export async function fetchDashboardInfoFiltered(
       revenue: c2r(p.revenue),
     }))
 
-  const profitByHour: UTMifyHourlyProfit[] = (d.profitByHourNet ?? []).map(
+  const rawProfitHourF: { hour: number; value: number }[] =
+    (d.profitByHourNet?.length ? d.profitByHourNet : null)
+    ?? (d.profitByHourGross?.length ? d.profitByHourGross : null)
+    ?? []
+  const profitByHour: UTMifyHourlyProfit[] = rawProfitHourF.map(
     (h: { hour: number; value: number }) => ({ hour: h.hour, profit: c2r(h.value) }),
   )
 
