@@ -931,19 +931,6 @@ export default function UTMifyPage() {
                         ))}
                       </div>
                     )}
-                    <select value={campSort} onChange={e=>setCampSort(e.target.value as typeof campSort)}
-                      className="h-8 px-2 text-[11px] rounded-xl bg-surface-raised border border-surface-border text-slate-300
-                                 focus:outline-none cursor-pointer">
-                      <option value="spend">Gasto</option>
-                      <option value="revenue">Receita</option>
-                      <option value="profit">Lucro</option>
-                      <option value="roas">ROAS</option>
-                      <option value="clicks">Cliques</option>
-                    </select>
-                    <button onClick={()=>setCampSortDir(d=>d==='desc'?'asc':'desc')}
-                      className="btn-icon !w-8 !h-8" title={campSortDir==='desc'?'↓ Maior primeiro':'↑ Menor primeiro'}>
-                      <ArrowUpDown size={12}/>
-                    </button>
                     <button onClick={()=>fetchCampaigns(dateRange,dashboardId)} disabled={campLoading||!dashboardId}
                       className="btn-icon !w-8 !h-8">
                       <RefreshCw size={12} className={campLoading?'animate-spin':''}/>
@@ -1002,95 +989,172 @@ export default function UTMifyPage() {
                     </div>
                   )
 
+                  // shared grid template: icon | name | gasto | receita | lucro | roas | cliques | impressões | pedidos | roi | chevron
+                  const COLS = 'grid-cols-[40px_1fr_84px_84px_80px_60px_68px_80px_56px_76px_16px]'
+
+                  type SortKey = typeof campSort
+                  const sortCols: { key: SortKey; label: string }[] = [
+                    { key: 'spend',               label: 'Gasto'      },
+                    { key: 'revenue',             label: 'Receita'    },
+                    { key: 'profit',              label: 'Lucro'      },
+                    { key: 'roas',                label: 'ROAS'       },
+                    { key: 'clicks',              label: 'Cliques'    },
+                    { key: 'impressions',         label: 'Impressões' },
+                    { key: 'approvedOrdersCount', label: 'Pedidos'    },
+                    { key: 'roi',                 label: 'ROI'        },
+                  ]
+
+                  function SortHeader({ col }: { col: typeof sortCols[number] }) {
+                    const active = campSort === col.key
+                    return (
+                      <button
+                        onClick={() => {
+                          if (active) setCampSortDir(d => d === 'desc' ? 'asc' : 'desc')
+                          else { setCampSort(col.key); setCampSortDir('desc') }
+                        }}
+                        className={`flex items-center justify-end gap-0.5 w-full transition-colors
+                          ${active ? 'text-violet-400' : 'text-slate-600 hover:text-slate-400'}`}>
+                        <span className="truncate">{col.label}</span>
+                        {active
+                          ? <span className="text-[9px] leading-none shrink-0">{campSortDir==='desc'?'↓':'↑'}</span>
+                          : <span className="text-[8px] leading-none shrink-0 opacity-30">↕</span>}
+                      </button>
+                    )
+                  }
+
                   return (
-                    <div className="space-y-1.5">
-                      {/* Header */}
-                      <div className="hidden lg:grid grid-cols-[1fr_88px_88px_80px_64px_72px_72px_64px] gap-2
-                                      px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-600">
-                        <span className="capitalize">{levelLabel}</span>
-                        <span className="text-right">Gasto</span>
-                        <span className="text-right">Receita</span>
-                        <span className="text-right">Lucro</span>
-                        <span className="text-right">ROAS</span>
-                        <span className="text-right">Cliques</span>
-                        <span className="text-right">Impressões</span>
-                        <span className="text-right">Pedidos</span>
+                    <div className="space-y-1">
+                      {/* ── Header ─────────────────────────────────────── */}
+                      <div className={`hidden lg:grid ${COLS} gap-2 px-3 py-1.5
+                                       text-[10px] font-semibold uppercase tracking-[0.09em]`}>
+                        {/* icon placeholder */}
+                        <span/>
+                        {/* name */}
+                        <span className="text-slate-600 capitalize">{levelLabel}</span>
+                        {/* sortable cols */}
+                        {sortCols.map(col => (
+                          <SortHeader key={col.key} col={col}/>
+                        ))}
+                        {/* chevron placeholder */}
+                        <span/>
                       </div>
 
+                      {/* ── Rows ───────────────────────────────────────── */}
                       {filtered.map(c => {
-                        const platColor  = c.platform==='meta' ? '#1877f2' : '#34a853'
-                        const isActive   = c.status === 'ACTIVE' || c.status === 'ENABLED'
+                        const platColor    = c.platform==='meta' ? '#1877f2' : '#34a853'
+                        const isActive     = c.status === 'ACTIVE' || c.status === 'ENABLED'
                         const isProfitable = c.profit >= 0
 
                         return (
                           <div key={c.id}
                             onClick={()=>onRowClick?.(c)}
-                            className={`card px-4 py-3 transition-all ${isClickable?'cursor-pointer hover:border-slate-600/60 group':''}`}>
-                            <div className="flex items-start gap-3">
-                              {/* Plataforma + status */}
-                              <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
-                                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                            className={`card px-3 py-2.5 transition-all ${isClickable?'cursor-pointer hover:border-slate-600/60 group':''}`}>
+
+                            {/* Desktop: full grid */}
+                            <div className={`hidden lg:grid ${COLS} gap-2 items-center`}>
+                              {/* icon */}
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="w-6 h-6 rounded-md flex items-center justify-center"
                                   style={{background:`${platColor}20`,border:`1px solid ${platColor}40`}}>
-                                  <span className="text-[9px] font-black" style={{color:platColor}}>
+                                  <span className="text-[8px] font-black" style={{color:platColor}}>
                                     {c.platform==='meta'?'FB':'GL'}
                                   </span>
                                 </div>
                                 {isActive
-                                  ? <Play  size={9} className="text-emerald-400"/>
-                                  : <Pause size={9} className="text-slate-700"/>}
+                                  ? <Play  size={7} className="text-emerald-400"/>
+                                  : <Pause size={7} className="text-slate-700"/>}
                               </div>
 
-                              {/* Nome */}
-                              <div className="flex-1 min-w-0">
+                              {/* name */}
+                              <div className="min-w-0">
                                 <p className={`text-xs font-semibold truncate ${isClickable?'group-hover:text-white':''} text-slate-200`}
                                   title={c.name}>{c.name}</p>
-                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <div className="flex items-center gap-1 mt-0.5">
                                   {c.channel && (
-                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
+                                    <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded"
                                       style={{color:platColor,background:`${platColor}15`,border:`1px solid ${platColor}30`}}>
                                       {c.channel}
                                     </span>
                                   )}
-                                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded
+                                  <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded
                                     ${isActive?'text-emerald-400 bg-emerald-500/10 border border-emerald-500/25':'text-slate-600 bg-surface-raised border border-surface-border'}`}>
                                     {c.status}
                                   </span>
-                                  <span className="lg:hidden text-[10px] text-slate-500">{formatCurrency(c.spend)}</span>
                                 </div>
                               </div>
 
-                              {/* Desktop metrics */}
-                              <div className="hidden lg:grid grid-cols-[88px_88px_80px_64px_72px_72px_64px] gap-2 shrink-0 items-center">
-                                <span className="text-xs font-semibold text-blue-300 tabular-nums text-right">{formatCurrency(c.spend)}</span>
-                                <span className="text-xs font-semibold text-emerald-300 tabular-nums text-right">{formatCurrency(c.revenue)}</span>
-                                <span className={`text-xs font-semibold tabular-nums text-right ${isProfitable?'text-emerald-300':'text-rose-300'}`}>
-                                  {formatCurrency(c.profit)}
-                                </span>
-                                <span className={`text-xs font-bold tabular-nums text-right ${c.roas>=1?'text-violet-300':'text-amber-300'}`}>
-                                  {c.roas.toFixed(2)}×
-                                </span>
-                                <span className="text-xs text-slate-400 tabular-nums text-right">{formatNumber(c.clicks)}</span>
-                                <span className="text-xs text-slate-600 tabular-nums text-right">{formatNumber(c.impressions)}</span>
-                                <span className="text-xs text-slate-400 font-semibold tabular-nums text-right">{c.approvedOrdersCount}</span>
-                              </div>
+                              {/* gasto */}
+                              <span className={`text-xs font-semibold tabular-nums text-right
+                                ${campSort==='spend'?'text-violet-300':'text-blue-300'}`}>
+                                {formatCurrency(c.spend)}
+                              </span>
+                              {/* receita */}
+                              <span className={`text-xs font-semibold tabular-nums text-right
+                                ${campSort==='revenue'?'text-violet-300':'text-emerald-300'}`}>
+                                {formatCurrency(c.revenue)}
+                              </span>
+                              {/* lucro */}
+                              <span className={`text-xs font-semibold tabular-nums text-right
+                                ${campSort==='profit'?'text-violet-300':isProfitable?'text-emerald-300':'text-rose-300'}`}>
+                                {formatCurrency(c.profit)}
+                              </span>
+                              {/* roas */}
+                              <span className={`text-xs font-bold tabular-nums text-right
+                                ${campSort==='roas'?'text-violet-300':c.roas>=1?'text-amber-300':'text-slate-500'}`}>
+                                {c.roas.toFixed(2)}×
+                              </span>
+                              {/* cliques */}
+                              <span className={`text-xs tabular-nums text-right
+                                ${campSort==='clicks'?'text-violet-300':'text-slate-400'}`}>
+                                {formatNumber(c.clicks)}
+                              </span>
+                              {/* impressões */}
+                              <span className={`text-xs tabular-nums text-right
+                                ${campSort==='impressions'?'text-violet-300':'text-slate-600'}`}>
+                                {formatNumber(c.impressions)}
+                              </span>
+                              {/* pedidos */}
+                              <span className={`text-xs font-semibold tabular-nums text-right
+                                ${campSort==='approvedOrdersCount'?'text-violet-300':'text-slate-400'}`}>
+                                {c.approvedOrdersCount}
+                              </span>
+                              {/* roi */}
+                              <span className={`text-[10px] font-bold tabular-nums text-right px-1.5 py-0.5 rounded-md
+                                ${campSort==='roi'
+                                  ? c.roi>=0?'bg-violet-500/20 text-violet-300 border border-violet-500/30':'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                                  : c.roi>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
+                                {c.roi>=0?'+':''}{c.roi.toFixed(1)}%
+                              </span>
+                              {/* chevron */}
+                              {isClickable
+                                ? <ChevronRight size={13} className="text-slate-700 group-hover:text-slate-400 transition-colors justify-self-center"/>
+                                : <span/>}
+                            </div>
 
-                              {/* ROI + chevron */}
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold tabular-nums
-                                  ${c.roi>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
-                                  {c.roi>=0?'+':''}{c.roi.toFixed(1)}%
+                            {/* Mobile: compact */}
+                            <div className="lg:hidden flex items-center gap-3">
+                              <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                                style={{background:`${platColor}20`,border:`1px solid ${platColor}40`}}>
+                                <span className="text-[8px] font-black" style={{color:platColor}}>
+                                  {c.platform==='meta'?'FB':'GL'}
                                 </span>
-                                {isClickable && (
-                                  <ChevronRight size={14} className="text-slate-700 group-hover:text-slate-400 transition-colors"/>
-                                )}
                               </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold truncate text-slate-200" title={c.name}>{c.name}</p>
+                                <p className="text-[10px] text-slate-500">{formatCurrency(c.spend)} gasto</p>
+                              </div>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums
+                                ${c.roi>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
+                                {c.roi>=0?'+':''}{c.roi.toFixed(1)}%
+                              </span>
+                              {isClickable && <ChevronRight size={13} className="text-slate-600 shrink-0"/>}
                             </div>
                           </div>
                         )
                       })}
 
-                      <p className="text-center text-[10px] pt-2 font-medium" style={{color:levelColor}}>
-                        {filtered.length} {levelLabel}{filtered.length!==1?'s':''} · {campSort} {campSortDir==='desc'?'↓':'↑'}
+                      <p className="text-center text-[10px] pt-1.5 font-medium" style={{color:levelColor}}>
+                        {filtered.length} {levelLabel}{filtered.length!==1?'s':''}
                         {isClickable&&` · clique para ver ${campLevel==='campaigns'?'conjuntos':'anúncios'}`}
                       </p>
                     </div>
