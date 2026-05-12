@@ -6,7 +6,7 @@ import {
   RefreshCw, AlertCircle, BarChart3, Package, Zap, Menu,
   Eye, CreditCard, Repeat2, Clock, CalendarDays, Globe,
   Tag, TrendingDown, Users, ExternalLink, X, Loader2, ChevronRight,
-  Pause, Play, Search, ArrowUpDown,
+  Pause, Play, Search, ArrowUpDown, Layers,
 } from 'lucide-react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
@@ -276,8 +276,14 @@ export default function UTMifyPage() {
   const [lastUpdate,   setLastUpdate]   = useState('')
   const [configured,   setConfigured]   = useState(true)
 
-  // Campanhas
+  // Campanhas — nível hierarchy
+  type CampLevel = 'campaigns' | 'adsets' | 'ads'
+  const [campLevel,      setCampLevel]      = useState<CampLevel>('campaigns')
   const [campaigns,      setCampaigns]      = useState<UTMifyCampaignRow[]>([])
+  const [adSets,         setAdSets]         = useState<UTMifyCampaignRow[]>([])
+  const [ads,            setAds]            = useState<UTMifyCampaignRow[]>([])
+  const [selCampaign,    setSelCampaign]    = useState<UTMifyCampaignRow | null>(null)
+  const [selAdSet,       setSelAdSet]       = useState<UTMifyCampaignRow | null>(null)
   const [campLoading,    setCampLoading]    = useState(false)
   const [campError,      setCampError]      = useState<string | null>(null)
   const [campSearch,     setCampSearch]     = useState('')
@@ -340,8 +346,10 @@ export default function UTMifyPage() {
   const fetchCampaigns = useCallback(async (range: DateRange, dId: string) => {
     if (!dId) return
     setCampLoading(true); setCampError(null)
+    setCampLevel('campaigns'); setSelCampaign(null); setSelAdSet(null)
+    setAdSets([]); setAds([])
     try {
-      const p = new URLSearchParams({ from: range.from, to: range.to, dashboardId: dId, platform: 'both' })
+      const p = new URLSearchParams({ from: range.from, to: range.to, dashboardId: dId, platform: 'both', level: 'campaign' })
       const r = await fetch(`/api/utmify/campaigns?${p}`)
       const j = await r.json()
       if (!j.ok) throw new Error(j.error)
@@ -349,6 +357,48 @@ export default function UTMifyPage() {
     } catch(e:unknown) { setCampError(e instanceof Error ? e.message : 'Erro ao carregar campanhas') }
     finally { setCampLoading(false) }
   }, [])
+
+  /* ── Drill-down: campanha → conjuntos ──────────────────────────────────── */
+  async function drillToAdSets(campaign: UTMifyCampaignRow) {
+    setSelCampaign(campaign); setCampLevel('adsets'); setAdSets([]); setAds([])
+    setCampSearch(''); setCampLoading(true); setCampError(null)
+    try {
+      const level = campaign.platform === 'google' ? 'adGroup' : 'adset'
+      const p = new URLSearchParams({
+        from: dateRange.from, to: dateRange.to, dashboardId,
+        platform: campaign.platform, level,
+      })
+      const r = await fetch(`/api/utmify/campaigns?${p}`)
+      const j = await r.json()
+      if (!j.ok) throw new Error(j.error)
+      // Filtra client-side pelo campaignId pai
+      const all: UTMifyCampaignRow[] = j.campaigns ?? []
+      const filtered = all.filter(a => !a.campaignId || a.campaignId === campaign.id)
+      setAdSets(filtered.length > 0 ? filtered : all)
+    } catch(e:unknown) { setCampError(e instanceof Error ? e.message : 'Erro ao carregar conjuntos') }
+    finally { setCampLoading(false) }
+  }
+
+  /* ── Drill-down: conjunto → anúncios ───────────────────────────────────── */
+  async function drillToAds(adset: UTMifyCampaignRow) {
+    setSelAdSet(adset); setCampLevel('ads'); setAds([])
+    setCampSearch(''); setCampLoading(true); setCampError(null)
+    try {
+      const level = adset.platform === 'google' ? 'ad' : 'ad'
+      const p = new URLSearchParams({
+        from: dateRange.from, to: dateRange.to, dashboardId,
+        platform: adset.platform, level,
+      })
+      const r = await fetch(`/api/utmify/campaigns?${p}`)
+      const j = await r.json()
+      if (!j.ok) throw new Error(j.error)
+      const all: UTMifyCampaignRow[] = j.campaigns ?? []
+      // Filtra pelo adsetId pai
+      const filtered = all.filter(a => !a.adsetId || a.adsetId === adset.id || a.campaignId === selCampaign?.id)
+      setAds(filtered.length > 0 ? filtered : all)
+    } catch(e:unknown) { setCampError(e instanceof Error ? e.message : 'Erro ao carregar anúncios') }
+    finally { setCampLoading(false) }
+  }
 
   useEffect(() => { if (dashboardId) { fetchKpis(dateRange, dashboardId); fetchProfiles(dashboardId) } }, [dashboardId])
   useEffect(() => { if (dashboardId) fetchKpis(dateRange, dashboardId)  }, [dateRange])
@@ -817,78 +867,137 @@ export default function UTMifyPage() {
             {activeTab==='campanhas' && (
               <div className="space-y-4 animate-fade-in-up max-w-screen-2xl mx-auto">
 
-                {/* Toolbar */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex-1 min-w-[160px]">
-                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600"/>
-                    <input value={campSearch} onChange={e=>setCampSearch(e.target.value)}
-                      placeholder="Buscar campanha…"
-                      className="w-full h-9 pl-8 pr-3 text-xs rounded-xl bg-surface-raised border border-surface-border text-slate-300
-                                 placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500/50"/>
-                  </div>
+                {/* ── Breadcrumb / navegação hierárquica ─────────────────── */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {/* Campanhas */}
+                  <button onClick={()=>fetchCampaigns(dateRange,dashboardId)}
+                    className={`flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-semibold transition-all
+                      ${campLevel==='campaigns'?'bg-violet-600/25 text-violet-300 border border-violet-500/30':'text-slate-500 hover:text-slate-300 hover:bg-surface-hover'}`}>
+                    <Activity size={11}/> Campanhas
+                    {campLevel==='campaigns'&&campaigns.length>0&&(
+                      <span className="ml-1 text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded-md font-bold">{campaigns.length}</span>
+                    )}
+                  </button>
 
-                  {/* Filtro plataforma */}
-                  <div className="flex rounded-xl border border-surface-border overflow-hidden shrink-0">
-                    {(['both','meta','google'] as const).map(p=>(
-                      <button key={p} onClick={()=>setCampPlatFilter(p)}
-                        className={`px-3 h-9 text-[11px] font-semibold transition-all
-                          ${campPlatFilter===p?'bg-violet-600/30 text-violet-300':'text-slate-600 hover:text-slate-300 bg-surface-raised'}`}>
-                        {p==='both'?'Todas':p==='meta'?'Meta':'Google'}
+                  {selCampaign && (
+                    <>
+                      <ChevronRight size={12} className="text-slate-700 shrink-0"/>
+                      <button onClick={()=>{ setCampLevel('adsets'); setCampSearch('') }}
+                        className={`flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-semibold transition-all max-w-[200px]
+                          ${campLevel==='adsets'?'bg-blue-600/25 text-blue-300 border border-blue-500/30':'text-slate-500 hover:text-slate-300 hover:bg-surface-hover'}`}>
+                        <Layers size={11} className="shrink-0"/>
+                        <span className="truncate">{selCampaign.name}</span>
+                        {campLevel==='adsets'&&adSets.length>0&&(
+                          <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-md font-bold shrink-0">{adSets.length}</span>
+                        )}
                       </button>
-                    ))}
+                    </>
+                  )}
+
+                  {selAdSet && (
+                    <>
+                      <ChevronRight size={12} className="text-slate-700 shrink-0"/>
+                      <button onClick={()=>{ setCampLevel('ads'); setCampSearch('') }}
+                        className={`flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-semibold transition-all max-w-[200px]
+                          ${campLevel==='ads'?'bg-emerald-600/25 text-emerald-300 border border-emerald-500/30':'text-slate-500 hover:text-slate-300 hover:bg-surface-hover'}`}>
+                        <Tag size={11} className="shrink-0"/>
+                        <span className="truncate">{selAdSet.name}</span>
+                        {campLevel==='ads'&&ads.length>0&&(
+                          <span className="ml-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md font-bold shrink-0">{ads.length}</span>
+                        )}
+                      </button>
+                    </>
+                  )}
+
+                  <div className="flex-1"/>
+
+                  {/* Toolbar direita */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600"/>
+                      <input value={campSearch} onChange={e=>setCampSearch(e.target.value)}
+                        placeholder="Buscar…"
+                        className="h-8 pl-7 pr-3 text-xs rounded-xl bg-surface-raised border border-surface-border text-slate-300 w-36
+                                   placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500/50"/>
+                    </div>
+                    {campLevel==='campaigns' && (
+                      <div className="flex rounded-xl border border-surface-border overflow-hidden">
+                        {(['both','meta','google'] as const).map(p=>(
+                          <button key={p} onClick={()=>setCampPlatFilter(p)}
+                            className={`px-2.5 h-8 text-[11px] font-semibold transition-all
+                              ${campPlatFilter===p?'bg-violet-600/30 text-violet-300':'text-slate-600 hover:text-slate-300 bg-surface-raised'}`}>
+                            {p==='both'?'Todas':p==='meta'?'Meta':'Google'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <select value={campSort} onChange={e=>setCampSort(e.target.value as typeof campSort)}
+                      className="h-8 px-2 text-[11px] rounded-xl bg-surface-raised border border-surface-border text-slate-300
+                                 focus:outline-none cursor-pointer">
+                      <option value="spend">Gasto</option>
+                      <option value="revenue">Receita</option>
+                      <option value="profit">Lucro</option>
+                      <option value="roas">ROAS</option>
+                      <option value="clicks">Cliques</option>
+                    </select>
+                    <button onClick={()=>setCampSortDir(d=>d==='desc'?'asc':'desc')}
+                      className="btn-icon !w-8 !h-8" title={campSortDir==='desc'?'↓ Maior primeiro':'↑ Menor primeiro'}>
+                      <ArrowUpDown size={12}/>
+                    </button>
+                    <button onClick={()=>fetchCampaigns(dateRange,dashboardId)} disabled={campLoading||!dashboardId}
+                      className="btn-icon !w-8 !h-8">
+                      <RefreshCw size={12} className={campLoading?'animate-spin':''}/>
+                    </button>
                   </div>
-
-                  {/* Sort */}
-                  <select value={campSort} onChange={e=>setCampSort(e.target.value as typeof campSort)}
-                    className="h-9 px-3 text-xs rounded-xl bg-surface-raised border border-surface-border text-slate-300
-                               focus:outline-none focus:ring-1 focus:ring-brand-500/50 shrink-0">
-                    <option value="spend">Gasto</option>
-                    <option value="revenue">Receita</option>
-                    <option value="profit">Lucro</option>
-                    <option value="roas">ROAS</option>
-                    <option value="clicks">Cliques</option>
-                  </select>
-                  <button onClick={()=>setCampSortDir(d=>d==='desc'?'asc':'desc')}
-                    className="btn-icon !w-9 !h-9 shrink-0" title={campSortDir==='desc'?'Decrescente':'Crescente'}>
-                    <ArrowUpDown size={13}/>
-                  </button>
-
-                  <button onClick={()=>fetchCampaigns(dateRange,dashboardId)} disabled={campLoading||!dashboardId}
-                    className="btn-icon !w-9 !h-9 shrink-0">
-                    <RefreshCw size={13} className={campLoading?'animate-spin':''}/>
-                  </button>
                 </div>
 
                 {/* Error */}
                 {campError && (
-                  <div className="flex items-start gap-3 p-4 rounded-xl border border-rose-500/25 bg-rose-500/8 text-sm">
-                    <AlertCircle size={15} className="text-rose-400 shrink-0 mt-0.5"/>
+                  <div className="flex items-start gap-3 p-4 rounded-xl border border-rose-500/25 bg-rose-500/8">
+                    <AlertCircle size={14} className="text-rose-400 shrink-0 mt-0.5"/>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-rose-300 text-xs">Erro ao carregar campanhas</p>
-                      <p className="text-xs text-rose-400/70 mt-0.5 break-words">{campError}</p>
+                      <p className="font-semibold text-rose-300 text-xs">
+                        {campLevel==='campaigns'?'Erro ao carregar campanhas':campLevel==='adsets'?'Erro ao carregar conjuntos':'Erro ao carregar anúncios'}
+                        {campLevel!=='campaigns'&&<span className="text-rose-400/60 font-normal"> — Meta: adsets/ads podem não estar disponíveis neste plano</span>}
+                      </p>
+                      <p className="text-[11px] text-rose-400/70 mt-0.5 break-words">{campError}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Loading */}
                 {campLoading && (
-                  <div className="space-y-2">{[1,2,3,4,5].map(i=>(
+                  <div className="space-y-2">{[1,2,3,4].map(i=>(
                     <div key={i} className="h-14 rounded-xl bg-surface-raised animate-pulse"/>
                   ))}</div>
                 )}
 
-                {/* Table */}
-                {!campLoading && !campError && (() => {
-                  const filtered = campaigns
-                    .filter(c => campPlatFilter==='both' || c.platform===campPlatFilter)
+                {/* ── Tabela genérica ─────────────────────────────────────── */}
+                {!campLoading && (() => {
+                  const source = campLevel==='campaigns' ? campaigns : campLevel==='adsets' ? adSets : ads
+                  const onRowClick = campLevel==='campaigns'
+                    ? (c: UTMifyCampaignRow) => drillToAdSets(c)
+                    : campLevel==='adsets'
+                    ? (c: UTMifyCampaignRow) => drillToAds(c)
+                    : null
+
+                  const levelLabel = campLevel==='campaigns'?'campanha':campLevel==='adsets'?'conjunto':'anúncio'
+                  const levelColor = campLevel==='campaigns'?'#a78bfa':campLevel==='adsets'?'#60a5fa':'#34d399'
+
+                  const isClickable = onRowClick !== null
+
+                  const filtered = source
+                    .filter(c => campLevel!=='campaigns' || campPlatFilter==='both' || c.platform===campPlatFilter)
                     .filter(c => !campSearch || c.name.toLowerCase().includes(campSearch.toLowerCase()))
                     .sort((a,b) => campSortDir==='desc' ? b[campSort]-a[campSort] : a[campSort]-b[campSort])
 
-                  if (filtered.length === 0) return (
-                    <div className="card p-10 text-center">
-                      <Activity size={22} className="text-slate-700 mx-auto mb-2"/>
+                  if (filtered.length === 0 && !campError) return (
+                    <div className="card p-10 text-center space-y-2">
+                      <Activity size={22} className="text-slate-700 mx-auto"/>
                       <p className="text-sm text-slate-500 font-medium">
-                        {campaigns.length===0 ? 'Nenhuma campanha no período.' : 'Nenhuma campanha corresponde ao filtro.'}
+                        {source.length===0
+                          ? `Clique em Campanhas para carregar os dados.`
+                          : `Nenhum ${levelLabel} corresponde ao filtro.`}
                       </p>
                     </div>
                   )
@@ -896,9 +1005,9 @@ export default function UTMifyPage() {
                   return (
                     <div className="space-y-1.5">
                       {/* Header */}
-                      <div className="hidden lg:grid grid-cols-[1fr_80px_80px_80px_70px_70px_70px_70px] gap-2
+                      <div className="hidden lg:grid grid-cols-[1fr_88px_88px_80px_64px_72px_72px_64px] gap-2
                                       px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-600">
-                        <span>Campanha</span>
+                        <span className="capitalize">{levelLabel}</span>
                         <span className="text-right">Gasto</span>
                         <span className="text-right">Receita</span>
                         <span className="text-right">Lucro</span>
@@ -910,17 +1019,17 @@ export default function UTMifyPage() {
 
                       {filtered.map(c => {
                         const platColor  = c.platform==='meta' ? '#1877f2' : '#34a853'
-                        const isActive   = c.status === 'ACTIVE'
+                        const isActive   = c.status === 'ACTIVE' || c.status === 'ENABLED'
                         const isProfitable = c.profit >= 0
-                        const roiPct     = c.roi
 
                         return (
-                          <div key={c.id} className="card px-4 py-3">
+                          <div key={c.id}
+                            onClick={()=>onRowClick?.(c)}
+                            className={`card px-4 py-3 transition-all ${isClickable?'cursor-pointer hover:border-slate-600/60 group':''}`}>
                             <div className="flex items-start gap-3">
-
-                              {/* Plataforma + Status */}
-                              <div className="flex flex-col items-center gap-1.5 shrink-0 mt-0.5">
-                                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                              {/* Plataforma + status */}
+                              <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
+                                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                                   style={{background:`${platColor}20`,border:`1px solid ${platColor}40`}}>
                                   <span className="text-[9px] font-black" style={{color:platColor}}>
                                     {c.platform==='meta'?'FB':'GL'}
@@ -931,12 +1040,13 @@ export default function UTMifyPage() {
                                   : <Pause size={9} className="text-slate-700"/>}
                               </div>
 
-                              {/* Nome + canal */}
+                              {/* Nome */}
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-slate-200 truncate" title={c.name}>{c.name}</p>
-                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <p className={`text-xs font-semibold truncate ${isClickable?'group-hover:text-white':''} text-slate-200`}
+                                  title={c.name}>{c.name}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                   {c.channel && (
-                                    <span className="text-[9px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded"
+                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
                                       style={{color:platColor,background:`${platColor}15`,border:`1px solid ${platColor}30`}}>
                                       {c.channel}
                                     </span>
@@ -945,15 +1055,12 @@ export default function UTMifyPage() {
                                     ${isActive?'text-emerald-400 bg-emerald-500/10 border border-emerald-500/25':'text-slate-600 bg-surface-raised border border-surface-border'}`}>
                                     {c.status}
                                   </span>
-                                  {/* Mobile metrics */}
-                                  <span className="lg:hidden text-[10px] text-slate-500 font-medium">
-                                    {formatCurrency(c.spend)} gasto · {c.approvedOrdersCount} ped.
-                                  </span>
+                                  <span className="lg:hidden text-[10px] text-slate-500">{formatCurrency(c.spend)}</span>
                                 </div>
                               </div>
 
                               {/* Desktop metrics */}
-                              <div className="hidden lg:grid grid-cols-[80px_80px_80px_70px_70px_70px_70px] gap-2 shrink-0 items-center">
+                              <div className="hidden lg:grid grid-cols-[88px_88px_80px_64px_72px_72px_64px] gap-2 shrink-0 items-center">
                                 <span className="text-xs font-semibold text-blue-300 tabular-nums text-right">{formatCurrency(c.spend)}</span>
                                 <span className="text-xs font-semibold text-emerald-300 tabular-nums text-right">{formatCurrency(c.revenue)}</span>
                                 <span className={`text-xs font-semibold tabular-nums text-right ${isProfitable?'text-emerald-300':'text-rose-300'}`}>
@@ -964,29 +1071,27 @@ export default function UTMifyPage() {
                                 </span>
                                 <span className="text-xs text-slate-400 tabular-nums text-right">{formatNumber(c.clicks)}</span>
                                 <span className="text-xs text-slate-600 tabular-nums text-right">{formatNumber(c.impressions)}</span>
-                                <span className="text-xs text-slate-400 tabular-nums text-right font-semibold">{c.approvedOrdersCount}</span>
+                                <span className="text-xs text-slate-400 font-semibold tabular-nums text-right">{c.approvedOrdersCount}</span>
                               </div>
 
-                              {/* ROI badge */}
-                              <div className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold tabular-nums
-                                ${roiPct>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
-                                {roiPct>=0?'+':''}{roiPct.toFixed(1)}%
+                              {/* ROI + chevron */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold tabular-nums
+                                  ${c.roi>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
+                                  {c.roi>=0?'+':''}{c.roi.toFixed(1)}%
+                                </span>
+                                {isClickable && (
+                                  <ChevronRight size={14} className="text-slate-700 group-hover:text-slate-400 transition-colors"/>
+                                )}
                               </div>
-                            </div>
-
-                            {/* Mobile extra row */}
-                            <div className="lg:hidden mt-2 flex items-center gap-3 flex-wrap pl-10">
-                              <span className="text-[10px] text-slate-600">Receita: <span className="text-emerald-300 font-semibold">{formatCurrency(c.revenue)}</span></span>
-                              <span className="text-[10px] text-slate-600">Lucro: <span className={`font-semibold ${isProfitable?'text-emerald-300':'text-rose-300'}`}>{formatCurrency(c.profit)}</span></span>
-                              <span className="text-[10px] text-slate-600">ROAS: <span className="text-violet-300 font-semibold">{c.roas.toFixed(2)}×</span></span>
-                              <span className="text-[10px] text-slate-600">Cliques: <span className="text-slate-400 font-semibold">{formatNumber(c.clicks)}</span></span>
                             </div>
                           </div>
                         )
                       })}
 
-                      <p className="text-center text-[10px] text-slate-700 pt-2 font-medium">
-                        {filtered.length} campanha{filtered.length!==1?'s':''} · ordenado por {campSort} ({campSortDir==='desc'?'maior':'menor'} primeiro)
+                      <p className="text-center text-[10px] pt-2 font-medium" style={{color:levelColor}}>
+                        {filtered.length} {levelLabel}{filtered.length!==1?'s':''} · {campSort} {campSortDir==='desc'?'↓':'↑'}
+                        {isClickable&&` · clique para ver ${campLevel==='campaigns'?'conjuntos':'anúncios'}`}
                       </p>
                     </div>
                   )

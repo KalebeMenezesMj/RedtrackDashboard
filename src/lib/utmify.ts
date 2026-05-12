@@ -750,7 +750,8 @@ export type CampaignStatus = 'ACTIVE' | 'PAUSED' | 'DISABLED' | 'DELETED' | stri
 export interface UTMifyCampaignRow {
   id:                  string
   accountId:           string
-  campaignId?:         string
+  campaignId?:         string   // preenchido para adsets e ads
+  adsetId?:            string   // preenchido para ads (Meta: adset_id, Google: adGroupId)
   name:                string
   level:               CampaignLevel
   status:              CampaignStatus
@@ -777,10 +778,13 @@ export interface UTMifyCampaignRow {
 function parseCampaignRow(r: any, platform: 'meta' | 'google'): UTMifyCampaignRow {
   const c2r = (v: unknown) => typeof v === 'number' ? v / 100 : 0
   const roasMult = r.roas ?? 0
+  // adsetId: Meta usa adset_id / adsetId, Google usa adGroupId
+  const adsetId = r.adset_id ?? r.adsetId ?? r.adGroupId ?? r.adgroupId ?? undefined
   return {
     id:                  String(r.id ?? ''),
     accountId:           String(r.accountId ?? ''),
     campaignId:          r.campaignId != null ? String(r.campaignId) : undefined,
+    adsetId:             adsetId != null ? String(adsetId) : undefined,
     name:                String(r.name ?? ''),
     level:               (r.level ?? 'campaign') as CampaignLevel,
     status:              (r.status ?? 'UNKNOWN') as CampaignStatus,
