@@ -6,6 +6,7 @@ import {
   RefreshCw, AlertCircle, BarChart3, Package, Zap, Menu,
   Eye, CreditCard, Repeat2, Clock, CalendarDays, Globe,
   Tag, TrendingDown, Users, ExternalLink, X, Loader2, ChevronRight,
+  Pause, Play, Search, ArrowUpDown,
 } from 'lucide-react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
@@ -16,7 +17,7 @@ import DateRangePicker from '@/components/DateRangePicker'
 import StatusBadge     from '@/components/StatusBadge'
 import { formatCurrency, formatNumber } from '@/lib/format'
 import type { DateRange } from '@/lib/types'
-import type { UTMifyKPIData, UTMifyDashboard, UTMifyProfile } from '@/lib/utmify'
+import type { UTMifyKPIData, UTMifyDashboard, UTMifyProfile, UTMifyCampaignRow } from '@/lib/utmify'
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function localDate(d = new Date()) {
@@ -275,6 +276,15 @@ export default function UTMifyPage() {
   const [lastUpdate,   setLastUpdate]   = useState('')
   const [configured,   setConfigured]   = useState(true)
 
+  // Campanhas
+  const [campaigns,      setCampaigns]      = useState<UTMifyCampaignRow[]>([])
+  const [campLoading,    setCampLoading]    = useState(false)
+  const [campError,      setCampError]      = useState<string | null>(null)
+  const [campSearch,     setCampSearch]     = useState('')
+  const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'>('spend')
+  const [campSortDir,    setCampSortDir]    = useState<'desc'|'asc'>('desc')
+  const [campPlatFilter, setCampPlatFilter] = useState<'both'|'meta'|'google'>('both')
+
   // Drawer
   const [drawerOpen,    setDrawerOpen]    = useState(false)
   const [drawerTitle,   setDrawerTitle]   = useState('')
@@ -326,9 +336,25 @@ export default function UTMifyPage() {
     finally { setProfLoading(false) }
   }, [])
 
+  /* ── Carrega campanhas ────────────────────────────────────────────────────── */
+  const fetchCampaigns = useCallback(async (range: DateRange, dId: string) => {
+    if (!dId) return
+    setCampLoading(true); setCampError(null)
+    try {
+      const p = new URLSearchParams({ from: range.from, to: range.to, dashboardId: dId, platform: 'both' })
+      const r = await fetch(`/api/utmify/campaigns?${p}`)
+      const j = await r.json()
+      if (!j.ok) throw new Error(j.error)
+      setCampaigns(j.campaigns ?? [])
+    } catch(e:unknown) { setCampError(e instanceof Error ? e.message : 'Erro ao carregar campanhas') }
+    finally { setCampLoading(false) }
+  }, [])
+
   useEffect(() => { if (dashboardId) { fetchKpis(dateRange, dashboardId); fetchProfiles(dashboardId) } }, [dashboardId])
   useEffect(() => { if (dashboardId) fetchKpis(dateRange, dashboardId)  }, [dateRange])
   useEffect(() => { if (dashboardId && (activeTab === 'contas')) fetchProfiles(dashboardId) }, [activeTab])
+  useEffect(() => { if (dashboardId && activeTab === 'campanhas') fetchCampaigns(dateRange, dashboardId) }, [activeTab, dashboardId])
+  useEffect(() => { if (dashboardId && activeTab === 'campanhas') fetchCampaigns(dateRange, dashboardId) }, [dateRange])
 
   /* ── Drawer: abre para conta específica ───────────────────────────────── */
   async function openAccountDrawer(profile: UTMifyProfile, acc: {id:string;name:string}) {
@@ -789,41 +815,182 @@ export default function UTMifyPage() {
 
             {/* ════════════════ TAB: CAMPANHAS ════════════════ */}
             {activeTab==='campanhas' && (
-              <div className="space-y-3 animate-fade-in-up max-w-screen-2xl mx-auto">
-                <p className="text-[11px] text-slate-600 font-medium mb-4">
-                  Clique em uma plataforma para ver o detalhamento: receita, anúncios, países e funil.
-                </p>
-                {loading?<div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-20 rounded-xl bg-surface-raised animate-pulse"/>)}</div>
-                :platforms.filter(p=>p.spend>0).length===0
-                ?<div className="card p-8 text-center"><p className="text-sm text-slate-600">Nenhuma plataforma com gasto no período.</p></div>
-                :platforms.filter(p=>p.spend>0).map(p=>{
-                  const pct=totalSpend>0?(p.spend/totalSpend)*100:0
+              <div className="space-y-4 animate-fade-in-up max-w-screen-2xl mx-auto">
+
+                {/* Toolbar */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[160px]">
+                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600"/>
+                    <input value={campSearch} onChange={e=>setCampSearch(e.target.value)}
+                      placeholder="Buscar campanha…"
+                      className="w-full h-9 pl-8 pr-3 text-xs rounded-xl bg-surface-raised border border-surface-border text-slate-300
+                                 placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500/50"/>
+                  </div>
+
+                  {/* Filtro plataforma */}
+                  <div className="flex rounded-xl border border-surface-border overflow-hidden shrink-0">
+                    {(['both','meta','google'] as const).map(p=>(
+                      <button key={p} onClick={()=>setCampPlatFilter(p)}
+                        className={`px-3 h-9 text-[11px] font-semibold transition-all
+                          ${campPlatFilter===p?'bg-violet-600/30 text-violet-300':'text-slate-600 hover:text-slate-300 bg-surface-raised'}`}>
+                        {p==='both'?'Todas':p==='meta'?'Meta':'Google'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Sort */}
+                  <select value={campSort} onChange={e=>setCampSort(e.target.value as typeof campSort)}
+                    className="h-9 px-3 text-xs rounded-xl bg-surface-raised border border-surface-border text-slate-300
+                               focus:outline-none focus:ring-1 focus:ring-brand-500/50 shrink-0">
+                    <option value="spend">Gasto</option>
+                    <option value="revenue">Receita</option>
+                    <option value="profit">Lucro</option>
+                    <option value="roas">ROAS</option>
+                    <option value="clicks">Cliques</option>
+                  </select>
+                  <button onClick={()=>setCampSortDir(d=>d==='desc'?'asc':'desc')}
+                    className="btn-icon !w-9 !h-9 shrink-0" title={campSortDir==='desc'?'Decrescente':'Crescente'}>
+                    <ArrowUpDown size={13}/>
+                  </button>
+
+                  <button onClick={()=>fetchCampaigns(dateRange,dashboardId)} disabled={campLoading||!dashboardId}
+                    className="btn-icon !w-9 !h-9 shrink-0">
+                    <RefreshCw size={13} className={campLoading?'animate-spin':''}/>
+                  </button>
+                </div>
+
+                {/* Error */}
+                {campError && (
+                  <div className="flex items-start gap-3 p-4 rounded-xl border border-rose-500/25 bg-rose-500/8 text-sm">
+                    <AlertCircle size={15} className="text-rose-400 shrink-0 mt-0.5"/>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-rose-300 text-xs">Erro ao carregar campanhas</p>
+                      <p className="text-xs text-rose-400/70 mt-0.5 break-words">{campError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Loading */}
+                {campLoading && (
+                  <div className="space-y-2">{[1,2,3,4,5].map(i=>(
+                    <div key={i} className="h-14 rounded-xl bg-surface-raised animate-pulse"/>
+                  ))}</div>
+                )}
+
+                {/* Table */}
+                {!campLoading && !campError && (() => {
+                  const filtered = campaigns
+                    .filter(c => campPlatFilter==='both' || c.platform===campPlatFilter)
+                    .filter(c => !campSearch || c.name.toLowerCase().includes(campSearch.toLowerCase()))
+                    .sort((a,b) => campSortDir==='desc' ? b[campSort]-a[campSort] : a[campSort]-b[campSort])
+
+                  if (filtered.length === 0) return (
+                    <div className="card p-10 text-center">
+                      <Activity size={22} className="text-slate-700 mx-auto mb-2"/>
+                      <p className="text-sm text-slate-500 font-medium">
+                        {campaigns.length===0 ? 'Nenhuma campanha no período.' : 'Nenhuma campanha corresponde ao filtro.'}
+                      </p>
+                    </div>
+                  )
+
                   return (
-                    <button key={p.key} onClick={()=>openPlatformDrawer(p.key,p.traffic)}
-                      className="w-full card px-5 py-4 hover:border-slate-600/60 transition-all group text-left">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                          style={{background:`${p.color}20`,border:`1px solid ${p.color}40`}}>
-                          <span className="text-[11px] font-black" style={{color:p.color}}>{p.label.slice(0,2).toUpperCase()}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-bold text-slate-200 group-hover:text-white">{p.label} Ads</p>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-[10px] text-slate-600 tabular-nums">{pct.toFixed(1)}%</span>
-                              <span className="text-sm font-bold tabular-nums" style={{color:p.color}}>{formatCurrency(p.spend)}</span>
-                              <ChevronRight size={14} className="text-slate-700 group-hover:text-slate-400"/>
+                    <div className="space-y-1.5">
+                      {/* Header */}
+                      <div className="hidden lg:grid grid-cols-[1fr_80px_80px_80px_70px_70px_70px_70px] gap-2
+                                      px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-600">
+                        <span>Campanha</span>
+                        <span className="text-right">Gasto</span>
+                        <span className="text-right">Receita</span>
+                        <span className="text-right">Lucro</span>
+                        <span className="text-right">ROAS</span>
+                        <span className="text-right">Cliques</span>
+                        <span className="text-right">Impressões</span>
+                        <span className="text-right">Pedidos</span>
+                      </div>
+
+                      {filtered.map(c => {
+                        const platColor  = c.platform==='meta' ? '#1877f2' : '#34a853'
+                        const isActive   = c.status === 'ACTIVE'
+                        const isProfitable = c.profit >= 0
+                        const roiPct     = c.roi
+
+                        return (
+                          <div key={c.id} className="card px-4 py-3">
+                            <div className="flex items-start gap-3">
+
+                              {/* Plataforma + Status */}
+                              <div className="flex flex-col items-center gap-1.5 shrink-0 mt-0.5">
+                                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                                  style={{background:`${platColor}20`,border:`1px solid ${platColor}40`}}>
+                                  <span className="text-[9px] font-black" style={{color:platColor}}>
+                                    {c.platform==='meta'?'FB':'GL'}
+                                  </span>
+                                </div>
+                                {isActive
+                                  ? <Play  size={9} className="text-emerald-400"/>
+                                  : <Pause size={9} className="text-slate-700"/>}
+                              </div>
+
+                              {/* Nome + canal */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-slate-200 truncate" title={c.name}>{c.name}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  {c.channel && (
+                                    <span className="text-[9px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded"
+                                      style={{color:platColor,background:`${platColor}15`,border:`1px solid ${platColor}30`}}>
+                                      {c.channel}
+                                    </span>
+                                  )}
+                                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded
+                                    ${isActive?'text-emerald-400 bg-emerald-500/10 border border-emerald-500/25':'text-slate-600 bg-surface-raised border border-surface-border'}`}>
+                                    {c.status}
+                                  </span>
+                                  {/* Mobile metrics */}
+                                  <span className="lg:hidden text-[10px] text-slate-500 font-medium">
+                                    {formatCurrency(c.spend)} gasto · {c.approvedOrdersCount} ped.
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Desktop metrics */}
+                              <div className="hidden lg:grid grid-cols-[80px_80px_80px_70px_70px_70px_70px] gap-2 shrink-0 items-center">
+                                <span className="text-xs font-semibold text-blue-300 tabular-nums text-right">{formatCurrency(c.spend)}</span>
+                                <span className="text-xs font-semibold text-emerald-300 tabular-nums text-right">{formatCurrency(c.revenue)}</span>
+                                <span className={`text-xs font-semibold tabular-nums text-right ${isProfitable?'text-emerald-300':'text-rose-300'}`}>
+                                  {formatCurrency(c.profit)}
+                                </span>
+                                <span className={`text-xs font-bold tabular-nums text-right ${c.roas>=1?'text-violet-300':'text-amber-300'}`}>
+                                  {c.roas.toFixed(2)}×
+                                </span>
+                                <span className="text-xs text-slate-400 tabular-nums text-right">{formatNumber(c.clicks)}</span>
+                                <span className="text-xs text-slate-600 tabular-nums text-right">{formatNumber(c.impressions)}</span>
+                                <span className="text-xs text-slate-400 tabular-nums text-right font-semibold">{c.approvedOrdersCount}</span>
+                              </div>
+
+                              {/* ROI badge */}
+                              <div className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold tabular-nums
+                                ${roiPct>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
+                                {roiPct>=0?'+':''}{roiPct.toFixed(1)}%
+                              </div>
+                            </div>
+
+                            {/* Mobile extra row */}
+                            <div className="lg:hidden mt-2 flex items-center gap-3 flex-wrap pl-10">
+                              <span className="text-[10px] text-slate-600">Receita: <span className="text-emerald-300 font-semibold">{formatCurrency(c.revenue)}</span></span>
+                              <span className="text-[10px] text-slate-600">Lucro: <span className={`font-semibold ${isProfitable?'text-emerald-300':'text-rose-300'}`}>{formatCurrency(c.profit)}</span></span>
+                              <span className="text-[10px] text-slate-600">ROAS: <span className="text-violet-300 font-semibold">{c.roas.toFixed(2)}×</span></span>
+                              <span className="text-[10px] text-slate-600">Cliques: <span className="text-slate-400 font-semibold">{formatNumber(c.clicks)}</span></span>
                             </div>
                           </div>
-                          <div className="h-1.5 rounded-full bg-surface-raised overflow-hidden">
-                            <div className="h-full rounded-full transition-all duration-700" style={{width:`${pct}%`,background:p.color}}/>
-                          </div>
-                          <p className="text-[10px] text-slate-600 mt-1.5">{formatNumber(p.clicks)} cliques · {formatNumber(p.pv)} page views</p>
-                        </div>
-                      </div>
-                    </button>
+                        )
+                      })}
+
+                      <p className="text-center text-[10px] text-slate-700 pt-2 font-medium">
+                        {filtered.length} campanha{filtered.length!==1?'s':''} · ordenado por {campSort} ({campSortDir==='desc'?'maior':'menor'} primeiro)
+                      </p>
+                    </div>
                   )
-                })}
+                })()}
               </div>
             )}
 

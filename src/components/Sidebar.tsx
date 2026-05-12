@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  BarChart2, Layers, LayoutDashboard, Settings, Zap,
+  BarChart2, Layers, Settings, Zap,
   HelpCircle, Sparkles, TrendingUp, LogOut, X, Activity, BarChart3,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -11,7 +11,7 @@ import clsx from 'clsx'
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 interface NavItem {
-  icon:    typeof LayoutDashboard
+  icon:    typeof BarChart3
   label:   string
   href:    string | null
   badge?:  'new' | 'soon'
@@ -27,15 +27,9 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Visão Geral',
-    items: [
-      { icon: LayoutDashboard, label: 'Painel Geral',      href: '/',                  accent: 'text-brand-400' },
-    ],
-  },
-  {
     label: 'Plataformas',
     items: [
-      { icon: BarChart3,       label: 'RedTrack',              href: '/redtrack',             accent: 'text-blue-400'    },
+      { icon: BarChart3,       label: 'RedTrack',              href: '/',                     accent: 'text-blue-400'    },
       { icon: Activity,        label: 'UTMify',                href: '/utmify',               accent: 'text-emerald-400' },
     ],
   },

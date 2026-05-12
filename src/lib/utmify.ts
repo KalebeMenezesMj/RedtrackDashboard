@@ -8,10 +8,13 @@ const ORIGIN   = 'https://app.utmify.com.br'
 
 // ─── Token cache (server-side, in-memory) ─────────────────────────────────────
 
-let cachedToken:        string | null = null
-let tokenExpiresAt:     number        = 0
-let cachedRefreshToken: string | null = null
-let refreshExpiresAt:   number        = 0
+let cachedToken:          string | null = null
+let tokenExpiresAt:       number        = 0
+let cachedRefreshToken:   string | null = null
+let refreshExpiresAt:     number        = 0
+// Token is2FA = true (necessário para endpoints de campanhas)
+let cached2FAToken:       string | null = null
+let token2FAExpiresAt:    number        = 0
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -75,7 +78,20 @@ async function doRefresh(): Promise<string> {
   const data: { token: string } = await res.json()
   cachedToken    = data.token
   tokenExpiresAt = Date.now() + (57 * 60 * 1000)
+  // O refresh token produz token com is2FA: true — cacheia também como 2FA
+  cached2FAToken    = data.token
+  token2FAExpiresAt = Date.now() + (57 * 60 * 1000)
   return cachedToken
+}
+
+// Token is2FA: true — necessário para /orders/search-objects e derivados
+// Estratégia: sempre faz refresh (o /refresh-token devolve is2FA: true)
+async function get2FAToken(): Promise<string> {
+  const now = Date.now()
+  if (cached2FAToken && now < token2FAExpiresAt) return cached2FAToken
+  // Garante que temos refresh token primeiro
+  if (!cachedRefreshToken || now >= refreshExpiresAt) await login()
+  return doRefresh()
 }
 
 async function getToken(): Promise<string> {
@@ -682,4 +698,172 @@ export async function fetchDashboardInfoFiltered(
     topCountries,
     profitByHour,
   }
+}
+
+// ─── Tipos de Campanhas ───────────────────────────────────────────────────────
+
+export type CampaignLevel  = 'campaign' | 'account' | 'adGroup' | 'ad'
+export type CampaignStatus = 'ACTIVE' | 'PAUSED' | 'DISABLED' | 'DELETED' | string
+
+export interface UTMifyCampaignRow {
+  id:                  string
+  accountId:           string
+  campaignId?:         string
+  name:                string
+  level:               CampaignLevel
+  status:              CampaignStatus
+  channel:             string
+  platform:            'meta' | 'google'
+  spend:               number
+  revenue:             number
+  profit:              number
+  roas:                number
+  roi:                 number
+  clicks:              number
+  impressions:         number
+  frequency:           number
+  approvedOrdersCount: number
+  pendingOrdersCount:  number
+  cpa:                 number | null
+  cpm:                 number | null
+  cpc:                 number | null
+  dailyBudget:         number | null
+  lifetimeBudget:      number | null
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseCampaignRow(r: any, platform: 'meta' | 'google'): UTMifyCampaignRow {
+  const c2r = (v: unknown) => typeof v === 'number' ? v / 100 : 0
+  const roasMult = r.roas ?? 0
+  return {
+    id:                  String(r.id ?? ''),
+    accountId:           String(r.accountId ?? ''),
+    campaignId:          r.campaignId != null ? String(r.campaignId) : undefined,
+    name:                String(r.name ?? ''),
+    level:               (r.level ?? 'campaign') as CampaignLevel,
+    status:              (r.status ?? 'UNKNOWN') as CampaignStatus,
+    channel:             String(r.channel ?? ''),
+    platform,
+    spend:               c2r(r.spend),
+    revenue:             c2r(r.revenue),
+    profit:              c2r(r.profit),
+    roas:                roasMult,
+    roi:                 (roasMult - 1) * 100,
+    clicks:              r.inlineLinkClicks ?? r.clicks ?? 0,
+    impressions:         r.impressions      ?? 0,
+    frequency:           r.frequency        ?? 0,
+    approvedOrdersCount: r.approvedOrdersCount ?? 0,
+    pendingOrdersCount:  r.pendingOrdersCount  ?? 0,
+    cpa:                 r.cpa    != null ? c2r(r.cpa)    : null,
+    cpm:                 r.cpm    != null ? c2r(r.cpm)    : null,
+    cpc:                 r.cpc    != null ? c2r(r.cpc)    : null,
+    dailyBudget:         r.dailyBudget    != null ? c2r(r.dailyBudget)    : null,
+    lifetimeBudget:      r.lifetimeBudget != null ? c2r(r.lifetimeBudget) : null,
+  }
+}
+
+export interface SearchObjectsOptions {
+  level?:        CampaignLevel
+  adAccountIds?: string[] | null
+  nameContains?: string | null
+  status?:       string | null
+  productNames?: string[] | null
+}
+
+export async function fetchMetaCampaigns(
+  dashboardId: string,
+  from:         string,
+  to:           string,
+  opts:         SearchObjectsOptions = {},
+): Promise<UTMifyCampaignRow[]> {
+  const token = await get2FAToken()
+  const res = await fetch(`${BASE_URL}/orders/search-objects`, {
+    method:  'POST',
+    headers: reqHeaders(token),
+    body:    JSON.stringify({
+      level:        opts.level        ?? 'campaign',
+      dateRange:    { from: localDateToUTC(from, false), to: localDateToUTC(to, true) },
+      dashboardId,
+      adAccountIds: opts.adAccountIds ?? null,
+      nameContains: opts.nameContains ?? null,
+      status:       opts.status       ?? null,
+    }),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`UTMify /orders/search-objects falhou (${res.status}): ${text.slice(0, 200)}`)
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d: any = await res.json()
+  const results: unknown[] = Array.isArray(d) ? d : (d.results ?? [])
+  return results.map(r => parseCampaignRow(r, 'meta'))
+}
+
+export async function fetchGoogleCampaigns(
+  dashboardId: string,
+  from:         string,
+  to:           string,
+  opts:         SearchObjectsOptions = {},
+): Promise<UTMifyCampaignRow[]> {
+  const token = await get2FAToken()
+  const res = await fetch(`${BASE_URL}/orders/search-objects/google`, {
+    method:  'POST',
+    headers: reqHeaders(token),
+    body:    JSON.stringify({
+      level:        opts.level        ?? 'campaign',
+      dateRange:    { from: localDateToUTC(from, false), to: localDateToUTC(to, true) },
+      dashboardId,
+      adAccountIds: opts.adAccountIds ?? null,
+      nameContains: opts.nameContains ?? null,
+      productNames: opts.productNames ?? null,
+      status:       opts.status       ?? null,
+    }),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`UTMify /orders/search-objects/google falhou (${res.status}): ${text.slice(0, 200)}`)
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d: any = await res.json()
+  const results: unknown[] = Array.isArray(d) ? d : (d.results ?? [])
+  return results.map(r => parseCampaignRow(r, 'google'))
+}
+
+export interface UTMifyMetaAdAccount {
+  id:         string
+  name:       string
+  timezone:   string
+  status:     string
+  enabled:    boolean
+  profileIds: string[]
+}
+
+export async function fetchMetaAdAccounts(
+  dashboardId: string,
+): Promise<UTMifyMetaAdAccount[]> {
+  const token = await get2FAToken()
+  const res = await fetch(`${BASE_URL}/dashboards/meta/ad-accounts/list`, {
+    method:  'POST',
+    headers: reqHeaders(token),
+    body:    JSON.stringify({ dashboardId }),
+    cache:   'no-store',
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`UTMify /dashboards/meta/ad-accounts/list falhou (${res.status}): ${text.slice(0, 200)}`)
+  }
+  const data: unknown[] = await res.json()
+  return (Array.isArray(data) ? data : []).map((a: unknown) => {
+    const r = a as Record<string, unknown>
+    return {
+      id:         String(r.id   ?? ''),
+      name:       String(r.name ?? ''),
+      timezone:   String(r.timezone ?? ''),
+      status:     String(r.status   ?? ''),
+      enabled:    r.enabled !== false,
+      profileIds: (Array.isArray(r.profileIds) ? r.profileIds : []).map(String),
+    }
+  })
 }
