@@ -770,41 +770,69 @@ export interface UTMifyCampaignRow {
   cpa:                 number | null
   cpm:                 number | null
   cpc:                 number | null
+  ctr:                 number | null   // clicks/impressions*100
+  margin:              number | null   // profit/revenue*100
+  ic:                  number | null   // initiate checkouts count
+  cpi:                 number | null   // spend/ic
   dailyBudget:         number | null
   lifetimeBudget:      number | null
+  updatedAt:           string | null
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseCampaignRow(r: any, platform: 'meta' | 'google'): UTMifyCampaignRow {
-  const c2r = (v: unknown) => typeof v === 'number' ? v / 100 : 0
+  const c2r      = (v: unknown) => typeof v === 'number' ? v / 100 : 0
   const roasMult = r.roas ?? 0
-  // adsetId: Meta usa adset_id / adsetId, Google usa adGroupId
-  const adsetId = r.adset_id ?? r.adsetId ?? r.adGroupId ?? r.adgroupId ?? undefined
+  const adsetId  = r.adset_id ?? r.adsetId ?? r.adGroupId ?? r.adgroupId ?? undefined
+
+  const spend       = c2r(r.spend)
+  const revenue     = c2r(r.revenue)
+  const profit      = c2r(r.profit)
+  const clicks      = r.inlineLinkClicks ?? r.clicks ?? 0
+  const impressions = r.impressions ?? 0
+  const approved    = r.approvedOrdersCount ?? 0
+
+  // Derived / fallback metrics
+  const cpaRaw = r.cpa != null ? c2r(r.cpa) : approved    > 0 ? spend / approved              : null
+  const cpmRaw = r.cpm != null ? c2r(r.cpm) : impressions > 0 ? (spend / impressions) * 1000  : null
+  const cpcRaw = r.cpc != null ? c2r(r.cpc) : clicks      > 0 ? spend / clicks                : null
+  const icCount: number | null = typeof r.initiateCheckoutCount === 'number'
+    ? r.initiateCheckoutCount
+    : typeof r.initiateCheckouts === 'number' ? r.initiateCheckouts : null
+  const ctrRaw    = impressions > 0 ? (clicks / impressions) * 100 : null
+  const marginRaw = revenue     > 0 ? (profit / revenue) * 100     : null
+  const cpiRaw    = icCount != null && icCount > 0 ? spend / icCount : null
+
   return {
     id:                  String(r.id ?? ''),
     accountId:           String(r.accountId ?? ''),
     campaignId:          r.campaignId != null ? String(r.campaignId) : undefined,
-    adsetId:             adsetId != null ? String(adsetId) : undefined,
+    adsetId:             adsetId      != null ? String(adsetId)      : undefined,
     name:                String(r.name ?? ''),
-    level:               (r.level ?? 'campaign') as CampaignLevel,
-    status:              (r.status ?? 'UNKNOWN') as CampaignStatus,
+    level:               (r.level  ?? 'campaign') as CampaignLevel,
+    status:              (r.status ?? 'UNKNOWN')  as CampaignStatus,
     channel:             String(r.channel ?? ''),
     platform,
-    spend:               c2r(r.spend),
-    revenue:             c2r(r.revenue),
-    profit:              c2r(r.profit),
+    spend,
+    revenue,
+    profit,
     roas:                roasMult,
     roi:                 (roasMult - 1) * 100,
-    clicks:              r.inlineLinkClicks ?? r.clicks ?? 0,
-    impressions:         r.impressions      ?? 0,
-    frequency:           r.frequency        ?? 0,
-    approvedOrdersCount: r.approvedOrdersCount ?? 0,
-    pendingOrdersCount:  r.pendingOrdersCount  ?? 0,
-    cpa:                 r.cpa    != null ? c2r(r.cpa)    : null,
-    cpm:                 r.cpm    != null ? c2r(r.cpm)    : null,
-    cpc:                 r.cpc    != null ? c2r(r.cpc)    : null,
+    clicks,
+    impressions,
+    frequency:           r.frequency ?? 0,
+    approvedOrdersCount: approved,
+    pendingOrdersCount:  r.pendingOrdersCount ?? 0,
+    cpa:                 cpaRaw,
+    cpm:                 cpmRaw,
+    cpc:                 cpcRaw,
+    ctr:                 ctrRaw,
+    margin:              marginRaw,
+    ic:                  icCount,
+    cpi:                 cpiRaw,
     dailyBudget:         r.dailyBudget    != null ? c2r(r.dailyBudget)    : null,
     lifetimeBudget:      r.lifetimeBudget != null ? c2r(r.lifetimeBudget) : null,
+    updatedAt:           r.updatedAt ?? r.lastUpdate ?? r.lastUpdated ?? null,
   }
 }
 

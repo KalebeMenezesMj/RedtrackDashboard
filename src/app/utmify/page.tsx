@@ -287,7 +287,7 @@ export default function UTMifyPage() {
   const [campLoading,    setCampLoading]    = useState(false)
   const [campError,      setCampError]      = useState<string | null>(null)
   const [campSearch,     setCampSearch]     = useState('')
-  const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'|'impressions'|'approvedOrdersCount'|'roi'>('spend')
+  const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'|'impressions'|'approvedOrdersCount'|'roi'|'cpa'|'cpm'|'cpc'|'ctr'|'margin'|'ic'|'cpi'>('spend')
   const [campSortDir,    setCampSortDir]    = useState<'desc'|'asc'>('desc')
   const [campPlatFilter, setCampPlatFilter] = useState<'both'|'meta'|'google'>('both')
 
@@ -976,7 +976,12 @@ export default function UTMifyPage() {
                   const filtered = source
                     .filter(c => campLevel!=='campaigns' || campPlatFilter==='both' || c.platform===campPlatFilter)
                     .filter(c => !campSearch || c.name.toLowerCase().includes(campSearch.toLowerCase()))
-                    .sort((a,b) => campSortDir==='desc' ? b[campSort]-a[campSort] : a[campSort]-b[campSort])
+                    .sort((a,b) => {
+                      const inf = campSortDir==='desc' ? -Infinity : Infinity
+                      const va  = (a[campSort] as number|null) ?? inf
+                      const vb  = (b[campSort] as number|null) ?? inf
+                      return campSortDir==='desc' ? vb-va : va-vb
+                    })
 
                   if (filtered.length === 0 && !campError) return (
                     <div className="card p-10 text-center space-y-2">
@@ -989,169 +994,223 @@ export default function UTMifyPage() {
                     </div>
                   )
 
-                  // shared grid template: icon | name | gasto | receita | lucro | roas | cliques | impressões | pedidos | roi | chevron
-                  const COLS = 'grid-cols-[40px_1fr_84px_84px_80px_60px_68px_80px_56px_76px_16px]'
-
-                  type SortKey = typeof campSort
-                  const sortCols: { key: SortKey; label: string }[] = [
-                    { key: 'spend',               label: 'Gasto'      },
-                    { key: 'revenue',             label: 'Receita'    },
-                    { key: 'profit',              label: 'Lucro'      },
-                    { key: 'roas',                label: 'ROAS'       },
-                    { key: 'clicks',              label: 'Cliques'    },
-                    { key: 'impressions',         label: 'Impressões' },
-                    { key: 'approvedOrdersCount', label: 'Pedidos'    },
-                    { key: 'roi',                 label: 'ROI'        },
-                  ]
-
-                  function SortHeader({ col }: { col: typeof sortCols[number] }) {
-                    const active = campSort === col.key
+                  // ── column helpers ──────────────────────────────────
+                  type SK = typeof campSort
+                  const cur = (v: number | null) => v == null ? '—' : formatCurrency(v)
+                  const num = (v: number | null) => v == null ? '—' : formatNumber(v)
+                  const pct = (v: number | null, d=1) =>
+                    v == null ? '—' : `${v>=0?'+':''}${v.toFixed(d)}%`
+                  const budget = (c: UTMifyCampaignRow) => {
+                    const b = c.dailyBudget ?? c.lifetimeBudget
+                    return b != null ? formatCurrency(b) : '—'
+                  }
+                  const sortBtn = (key: SK, label: string) => {
+                    const on = campSort === key
                     return (
-                      <button
-                        onClick={() => {
-                          if (active) setCampSortDir(d => d === 'desc' ? 'asc' : 'desc')
-                          else { setCampSort(col.key); setCampSortDir('desc') }
-                        }}
+                      <button key={key}
+                        onClick={() => { if (on) setCampSortDir(d=>d==='desc'?'asc':'desc')
+                                         else { setCampSort(key); setCampSortDir('desc') } }}
                         className={`flex items-center justify-end gap-0.5 w-full transition-colors
-                          ${active ? 'text-violet-400' : 'text-slate-600 hover:text-slate-400'}`}>
-                        <span className="truncate">{col.label}</span>
-                        {active
-                          ? <span className="text-[9px] leading-none shrink-0">{campSortDir==='desc'?'↓':'↑'}</span>
-                          : <span className="text-[8px] leading-none shrink-0 opacity-30">↕</span>}
+                          ${on?'text-violet-400':'text-slate-600 hover:text-slate-400'}`}>
+                        <span className="truncate">{label}</span>
+                        <span className="text-[8px] leading-none shrink-0">
+                          {on?(campSortDir==='desc'?'↓':'↑'):'↕'}
+                        </span>
                       </button>
                     )
                   }
+                  const hi = (key: SK, base: string) =>
+                    campSort===key ? 'text-violet-300' : base
+
+                  // ── per-level grid template ─────────────────────────
+                  // cols: status | name | budget | [updatedAt] | vendas | cpa | gasto | fat | lucro | roas | margem | roi | ic | cpi | cpc | ctr | cpm | impressoes | cliques | [chevron]
+                  const hasUpdate  = campLevel==='adsets'
+                  const hasChevron = isClickable
+                  const GT = [
+                    '26px',                    // status icon
+                    'minmax(140px,1fr)',        // name
+                    '78px',                    // orçamento
+                    ...(hasUpdate?['88px']:[]),// ult.atualização (adsets only)
+                    '52px',                    // vendas
+                    '76px',                    // cpa
+                    '80px',                    // gasto
+                    '80px',                    // faturamento
+                    '76px',                    // lucro
+                    '52px',                    // roas
+                    '64px',                    // margem
+                    '64px',                    // roi
+                    '50px',                    // ic
+                    '72px',                    // cpi
+                    '68px',                    // cpc
+                    '54px',                    // ctr
+                    '68px',                    // cpm
+                    '74px',                    // impressões
+                    '60px',                    // cliques
+                    ...(hasChevron?['14px']:[]),// chevron
+                  ].join(' ')
 
                   return (
                     <div className="space-y-1">
                       {/* ── Header ─────────────────────────────────────── */}
-                      <div className={`hidden lg:grid ${COLS} gap-2 px-3 py-1.5
-                                       text-[10px] font-semibold uppercase tracking-[0.09em]`}>
-                        {/* icon placeholder */}
-                        <span/>
-                        {/* name */}
-                        <span className="text-slate-600 capitalize">{levelLabel}</span>
-                        {/* sortable cols */}
-                        {sortCols.map(col => (
-                          <SortHeader key={col.key} col={col}/>
-                        ))}
-                        {/* chevron placeholder */}
-                        <span/>
+                      <div className="overflow-x-auto">
+                        <div style={{gridTemplateColumns:GT}}
+                             className="hidden lg:grid gap-x-1.5 px-2 pb-1.5
+                                        text-[9px] font-semibold uppercase tracking-[0.08em]">
+                          <span/>{/* status */}
+                          <span className="text-slate-600 capitalize">{levelLabel}</span>
+                          <span className="text-right text-slate-600">Orçamento</span>
+                          {hasUpdate&&<span className="text-right text-slate-600">Atualização</span>}
+                          {sortBtn('approvedOrdersCount','Vendas')}
+                          {sortBtn('cpa','CPA')}
+                          {sortBtn('spend','Gasto')}
+                          {sortBtn('revenue','Fat.')}
+                          {sortBtn('profit','Lucro')}
+                          {sortBtn('roas','ROAS')}
+                          {sortBtn('margin','Margem')}
+                          {sortBtn('roi','ROI')}
+                          {sortBtn('ic','IC')}
+                          {sortBtn('cpi','CPI')}
+                          {sortBtn('cpc','CPC')}
+                          {sortBtn('ctr','CTR')}
+                          {sortBtn('cpm','CPM')}
+                          {sortBtn('impressions','Impressões')}
+                          {sortBtn('clicks','Cliques')}
+                          {hasChevron&&<span/>}
+                        </div>
                       </div>
 
                       {/* ── Rows ───────────────────────────────────────── */}
-                      {filtered.map(c => {
-                        const platColor    = c.platform==='meta' ? '#1877f2' : '#34a853'
-                        const isActive     = c.status === 'ACTIVE' || c.status === 'ENABLED'
-                        const isProfitable = c.profit >= 0
+                      <div className="overflow-x-auto">
+                        <div style={{minWidth:'1180px'}} className="space-y-1">
+                          {filtered.map(c => {
+                            const pc       = c.platform==='meta'?'#1877f2':'#34a853'
+                            const isActive = c.status==='ACTIVE'||c.status==='ENABLED'
+                            const updStr   = c.updatedAt
+                              ? new Date(c.updatedAt).toLocaleString('pt-BR',
+                                  {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+                              : '—'
+                            return (
+                              <div key={c.id}
+                                onClick={()=>onRowClick?.(c)}
+                                style={{gridTemplateColumns:GT}}
+                                className={`card px-2 py-2 grid gap-x-1.5 items-center transition-all
+                                  ${isClickable?'cursor-pointer hover:border-slate-600/60 group':''}`}>
 
-                        return (
-                          <div key={c.id}
-                            onClick={()=>onRowClick?.(c)}
-                            className={`card px-3 py-2.5 transition-all ${isClickable?'cursor-pointer hover:border-slate-600/60 group':''}`}>
-
-                            {/* Desktop: full grid */}
-                            <div className={`hidden lg:grid ${COLS} gap-2 items-center`}>
-                              {/* icon */}
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className="w-6 h-6 rounded-md flex items-center justify-center"
-                                  style={{background:`${platColor}20`,border:`1px solid ${platColor}40`}}>
-                                  <span className="text-[8px] font-black" style={{color:platColor}}>
+                                {/* status icon */}
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <div className="w-5 h-5 rounded flex items-center justify-center text-[7px] font-black"
+                                    style={{background:`${pc}20`,border:`1px solid ${pc}40`,color:pc}}>
                                     {c.platform==='meta'?'FB':'GL'}
-                                  </span>
+                                  </div>
+                                  {isActive
+                                    ?<Play  size={6} className="text-emerald-400"/>
+                                    :<Pause size={6} className="text-slate-700"/>}
                                 </div>
-                                {isActive
-                                  ? <Play  size={7} className="text-emerald-400"/>
-                                  : <Pause size={7} className="text-slate-700"/>}
-                              </div>
 
-                              {/* name */}
-                              <div className="min-w-0">
-                                <p className={`text-xs font-semibold truncate ${isClickable?'group-hover:text-white':''} text-slate-200`}
-                                  title={c.name}>{c.name}</p>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  {c.channel && (
-                                    <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded"
-                                      style={{color:platColor,background:`${platColor}15`,border:`1px solid ${platColor}30`}}>
-                                      {c.channel}
+                                {/* name */}
+                                <div className="min-w-0">
+                                  <p className={`text-xs font-semibold truncate
+                                    ${isClickable?'group-hover:text-white':''} text-slate-200`}
+                                    title={c.name}>{c.name}</p>
+                                  <div className="flex items-center gap-1 mt-px">
+                                    {c.channel&&(
+                                      <span className="text-[8px] font-bold uppercase px-1 py-px rounded"
+                                        style={{color:pc,background:`${pc}15`,border:`1px solid ${pc}30`}}>
+                                        {c.channel}
+                                      </span>
+                                    )}
+                                    <span className={`text-[8px] font-bold uppercase px-1 py-px rounded
+                                      ${isActive
+                                        ?'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
+                                        :'text-slate-600 bg-surface-raised border border-surface-border'}`}>
+                                      {c.status}
                                     </span>
-                                  )}
-                                  <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded
-                                    ${isActive?'text-emerald-400 bg-emerald-500/10 border border-emerald-500/25':'text-slate-600 bg-surface-raised border border-surface-border'}`}>
-                                    {c.status}
-                                  </span>
+                                  </div>
                                 </div>
-                              </div>
 
-                              {/* gasto */}
-                              <span className={`text-xs font-semibold tabular-nums text-right
-                                ${campSort==='spend'?'text-violet-300':'text-blue-300'}`}>
-                                {formatCurrency(c.spend)}
-                              </span>
-                              {/* receita */}
-                              <span className={`text-xs font-semibold tabular-nums text-right
-                                ${campSort==='revenue'?'text-violet-300':'text-emerald-300'}`}>
-                                {formatCurrency(c.revenue)}
-                              </span>
-                              {/* lucro */}
-                              <span className={`text-xs font-semibold tabular-nums text-right
-                                ${campSort==='profit'?'text-violet-300':isProfitable?'text-emerald-300':'text-rose-300'}`}>
-                                {formatCurrency(c.profit)}
-                              </span>
-                              {/* roas */}
-                              <span className={`text-xs font-bold tabular-nums text-right
-                                ${campSort==='roas'?'text-violet-300':c.roas>=1?'text-amber-300':'text-slate-500'}`}>
-                                {c.roas.toFixed(2)}×
-                              </span>
-                              {/* cliques */}
-                              <span className={`text-xs tabular-nums text-right
-                                ${campSort==='clicks'?'text-violet-300':'text-slate-400'}`}>
-                                {formatNumber(c.clicks)}
-                              </span>
-                              {/* impressões */}
-                              <span className={`text-xs tabular-nums text-right
-                                ${campSort==='impressions'?'text-violet-300':'text-slate-600'}`}>
-                                {formatNumber(c.impressions)}
-                              </span>
-                              {/* pedidos */}
-                              <span className={`text-xs font-semibold tabular-nums text-right
-                                ${campSort==='approvedOrdersCount'?'text-violet-300':'text-slate-400'}`}>
-                                {c.approvedOrdersCount}
-                              </span>
-                              {/* roi */}
-                              <span className={`text-[10px] font-bold tabular-nums text-right px-1.5 py-0.5 rounded-md
-                                ${campSort==='roi'
-                                  ? c.roi>=0?'bg-violet-500/20 text-violet-300 border border-violet-500/30':'bg-violet-500/20 text-violet-300 border border-violet-500/30'
-                                  : c.roi>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
-                                {c.roi>=0?'+':''}{c.roi.toFixed(1)}%
-                              </span>
-                              {/* chevron */}
-                              {isClickable
-                                ? <ChevronRight size={13} className="text-slate-700 group-hover:text-slate-400 transition-colors justify-self-center"/>
-                                : <span/>}
-                            </div>
+                                {/* orçamento */}
+                                <span className="text-[11px] tabular-nums text-right text-slate-400">{budget(c)}</span>
 
-                            {/* Mobile: compact */}
-                            <div className="lg:hidden flex items-center gap-3">
-                              <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-                                style={{background:`${platColor}20`,border:`1px solid ${platColor}40`}}>
-                                <span className="text-[8px] font-black" style={{color:platColor}}>
-                                  {c.platform==='meta'?'FB':'GL'}
+                                {/* ult. atualização (adsets only) */}
+                                {hasUpdate&&(
+                                  <span className="text-[10px] tabular-nums text-right text-slate-600">{updStr}</span>
+                                )}
+
+                                {/* vendas */}
+                                <span className={`text-xs font-semibold tabular-nums text-right
+                                  ${hi('approvedOrdersCount', c.approvedOrdersCount>0?'text-emerald-300':'text-slate-600')}`}>
+                                  {c.approvedOrdersCount}
                                 </span>
+
+                                {/* cpa */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('cpa','text-slate-400')}`}>{cur(c.cpa)}</span>
+
+                                {/* gasto */}
+                                <span className={`text-xs font-semibold tabular-nums text-right ${hi('spend','text-blue-300')}`}>{cur(c.spend)}</span>
+
+                                {/* faturamento */}
+                                <span className={`text-xs font-semibold tabular-nums text-right ${hi('revenue','text-emerald-300')}`}>{cur(c.revenue)}</span>
+
+                                {/* lucro */}
+                                <span className={`text-xs font-semibold tabular-nums text-right
+                                  ${hi('profit', c.profit>=0?'text-emerald-300':'text-rose-300')}`}>
+                                  {cur(c.profit)}
+                                </span>
+
+                                {/* roas */}
+                                <span className={`text-xs font-bold tabular-nums text-right
+                                  ${hi('roas', c.roas>=1?'text-amber-300':'text-slate-500')}`}>
+                                  {c.roas.toFixed(2)}×
+                                </span>
+
+                                {/* margem */}
+                                <span className={`text-[11px] tabular-nums text-right
+                                  ${hi('margin', c.margin==null?'text-slate-700':c.margin>=0?'text-emerald-300':'text-rose-300')}`}>
+                                  {c.margin==null?'—':`${c.margin.toFixed(1)}%`}
+                                </span>
+
+                                {/* roi */}
+                                <span className={`text-[11px] font-bold tabular-nums text-right
+                                  ${hi('roi', c.roi>=0?'text-emerald-300':'text-rose-300')}`}>
+                                  {pct(c.roi,1)}
+                                </span>
+
+                                {/* ic */}
+                                <span className={`text-[11px] tabular-nums text-right
+                                  ${hi('ic', c.ic!=null&&c.ic>0?'text-slate-300':'text-slate-700')}`}>
+                                  {num(c.ic)}
+                                </span>
+
+                                {/* cpi */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('cpi','text-slate-400')}`}>{cur(c.cpi)}</span>
+
+                                {/* cpc */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('cpc','text-slate-400')}`}>{cur(c.cpc)}</span>
+
+                                {/* ctr */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('ctr','text-slate-400')}`}>
+                                  {c.ctr==null?'—':`${c.ctr.toFixed(2)}%`}
+                                </span>
+
+                                {/* cpm */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('cpm','text-slate-400')}`}>{cur(c.cpm)}</span>
+
+                                {/* impressões */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('impressions','text-slate-500')}`}>{num(c.impressions)}</span>
+
+                                {/* cliques */}
+                                <span className={`text-[11px] tabular-nums text-right ${hi('clicks','text-slate-400')}`}>{num(c.clicks)}</span>
+
+                                {/* chevron */}
+                                {hasChevron&&(
+                                  <ChevronRight size={12}
+                                    className="text-slate-700 group-hover:text-slate-400 transition-colors justify-self-center"/>
+                                )}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold truncate text-slate-200" title={c.name}>{c.name}</p>
-                                <p className="text-[10px] text-slate-500">{formatCurrency(c.spend)} gasto</p>
-                              </div>
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums
-                                ${c.roi>=0?'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25':'bg-rose-500/10 text-rose-300 border border-rose-500/25'}`}>
-                                {c.roi>=0?'+':''}{c.roi.toFixed(1)}%
-                              </span>
-                              {isClickable && <ChevronRight size={13} className="text-slate-600 shrink-0"/>}
-                            </div>
-                          </div>
-                        )
-                      })}
+                            )
+                          })}
+                        </div>
+                      </div>
 
                       <p className="text-center text-[10px] pt-1.5 font-medium" style={{color:levelColor}}>
                         {filtered.length} {levelLabel}{filtered.length!==1?'s':''}
