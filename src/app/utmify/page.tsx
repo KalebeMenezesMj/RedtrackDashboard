@@ -287,7 +287,7 @@ export default function UTMifyPage() {
   const [campLoading,    setCampLoading]    = useState(false)
   const [campError,      setCampError]      = useState<string | null>(null)
   const [campSearch,     setCampSearch]     = useState('')
-  const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'>('spend')
+  const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'|'impressions'|'approvedOrdersCount'|'roi'>('spend')
   const [campSortDir,    setCampSortDir]    = useState<'desc'|'asc'>('desc')
   const [campPlatFilter, setCampPlatFilter] = useState<'both'|'meta'|'google'>('both')
 
