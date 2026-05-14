@@ -6,7 +6,7 @@ import {
   RefreshCw, AlertCircle, BarChart3, Package, Zap, Menu,
   Eye, CreditCard, Repeat2, Clock, CalendarDays, Globe,
   Tag, TrendingDown, Users, ExternalLink, X, Loader2, ChevronRight,
-  Pause, Play, Search, ArrowUpDown, Layers,
+  Pause, Play, Search, ArrowUpDown, Layers, Download,
 } from 'lucide-react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
@@ -16,6 +16,7 @@ import Sidebar         from '@/components/Sidebar'
 import DateRangePicker from '@/components/DateRangePicker'
 import StatusBadge     from '@/components/StatusBadge'
 import { formatCurrency, formatNumber } from '@/lib/format'
+import { exportCampaignsExcel }         from '@/lib/exportCampaignsExcel'
 import type { DateRange } from '@/lib/types'
 import type { UTMifyKPIData, UTMifyDashboard, UTMifyProfile, UTMifyCampaignRow } from '@/lib/utmify'
 
@@ -293,6 +294,7 @@ export default function UTMifyPage() {
   const [campLoading,    setCampLoading]    = useState(false)
   const [campError,      setCampError]      = useState<string | null>(null)
   const [campSearch,     setCampSearch]     = useState('')
+  const [isExporting,    setIsExporting]    = useState(false)
   const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'|'impressions'|'approvedOrdersCount'|'roi'|'cpa'|'cpm'|'cpc'|'ctr'|'margin'|'ic'|'cpi'>('spend')
   const [campSortDir,    setCampSortDir]    = useState<'desc'|'asc'>('desc')
   const [campPlatFilter, setCampPlatFilter] = useState<'both'|'meta'|'google'>('both')
@@ -1018,8 +1020,46 @@ export default function UTMifyPage() {
                       </div>
                     )}
                     <button onClick={()=>fetchCampaigns(dateRange,dashboardId)} disabled={campLoading||!dashboardId}
-                      className="btn-icon !w-8 !h-8">
+                      className="btn-icon !w-8 !h-8" title="Atualizar campanhas">
                       <RefreshCw size={12} className={campLoading?'animate-spin':''}/>
+                    </button>
+
+                    {/* Exportar Excel */}
+                    <button
+                      title="Exportar para Excel (.xlsx)"
+                      disabled={isExporting || campLoading || (
+                        campLevel==='campaigns' ? campaigns.length === 0
+                        : campLevel==='adsets'  ? adSets.length === 0
+                        : ads.length === 0
+                      )}
+                      onClick={async () => {
+                        setIsExporting(true)
+                        try {
+                          const source =
+                            campLevel==='campaigns' ? campaigns
+                            : campLevel==='adsets'  ? adSets
+                            : ads
+                          const dbName = dashboards.find(d=>d.id===dashboardId)?.name ?? 'Dashboard'
+                          exportCampaignsExcel({
+                            rows:          source,
+                            level:         campLevel,
+                            dashboardName: dbName,
+                            dateFrom:      dateRange.from,
+                            dateTo:        dateRange.to,
+                            currency,
+                          })
+                        } finally {
+                          setIsExporting(false)
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-[11px] font-semibold transition-all
+                        border border-emerald-500/30 bg-emerald-500/10 text-emerald-400
+                        hover:bg-emerald-500/20 hover:border-emerald-500/50
+                        disabled:opacity-40 disabled:cursor-not-allowed`}>
+                      {isExporting
+                        ? <Loader2 size={12} className="animate-spin"/>
+                        : <Download size={12}/>}
+                      <span className="hidden sm:inline">{isExporting ? 'Exportando…' : 'Excel'}</span>
                     </button>
                   </div>
                 </div>
