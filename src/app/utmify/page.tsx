@@ -30,10 +30,9 @@ const DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
 type Tab = 'overview' | 'contas' | 'campanhas' | 'anuncios'
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'overview',  label: 'Visão Geral', icon: BarChart3      },
-  { id: 'contas',    label: 'Contas',      icon: CreditCard     },
-  { id: 'campanhas', label: 'Campanhas',   icon: Activity       },
-  { id: 'anuncios',  label: 'Anúncios',   icon: Tag            },
+  { id: 'overview',  label: 'Visão Geral', icon: BarChart3  },
+  { id: 'contas',    label: 'Contas',      icon: CreditCard },
+  { id: 'campanhas', label: 'Campanhas',   icon: Activity   },
 ]
 
 /* ─── Cores ──────────────────────────────────────────────────────────────── */
@@ -268,6 +267,7 @@ export default function UTMifyPage() {
   const [dashboards,   setDashboards]   = useState<UTMifyDashboard[]>([])
   const [dashboardId,  setDashboardId]  = useState('')
   const [kpis,         setKpis]         = useState<UTMifyKPIData | null>(null)
+  const [currency,     setCurrency]     = useState<string>('BRL')
   const [profiles,     setProfiles]     = useState<UTMifyProfile[]>([])
   const [loading,      setLoading]      = useState(false)
   const [profLoading,  setProfLoading]  = useState(false)
@@ -323,7 +323,7 @@ export default function UTMifyPage() {
       const r = await fetch(`/api/utmify?${p}`)
       const j = await r.json()
       if (!j.ok) throw new Error(j.error ?? 'Falha')
-      setKpis(j.kpis); setApiStatus('connected')
+      setKpis(j.kpis); setCurrency(j.kpis?.currency ?? 'BRL'); setApiStatus('connected')
       setLastUpdate(new Date().toLocaleTimeString('pt-BR'))
     } catch(e:unknown) {
       setError(e instanceof Error ? e.message : 'Erro'); setApiStatus('error')
@@ -1023,65 +1023,65 @@ export default function UTMifyPage() {
                     campSort===key ? 'text-violet-300' : base
 
                   // ── per-level grid template ─────────────────────────
-                  // cols: status | name | budget | [updatedAt] | vendas | cpa | gasto | fat | lucro | roas | margem | roi | ic | cpi | cpc | ctr | cpm | impressoes | cliques | [chevron]
+                  // Widths calibrated to fit a 1440px screen (sidebar ~200px, padding ~32px → ~1208px available)
+                  // Fixed cols total ≈ 920px + gaps → name gets remaining ~250px
                   const hasUpdate  = campLevel==='adsets'
                   const hasChevron = isClickable
                   const GT = [
-                    '26px',                    // status icon
-                    'minmax(140px,1fr)',        // name
-                    '78px',                    // orçamento
-                    ...(hasUpdate?['88px']:[]),// ult.atualização (adsets only)
-                    '52px',                    // vendas
-                    '76px',                    // cpa
-                    '80px',                    // gasto
-                    '80px',                    // faturamento
-                    '76px',                    // lucro
-                    '52px',                    // roas
-                    '64px',                    // margem
-                    '64px',                    // roi
-                    '50px',                    // ic
-                    '72px',                    // cpi
-                    '68px',                    // cpc
-                    '54px',                    // ctr
-                    '68px',                    // cpm
-                    '74px',                    // impressões
-                    '60px',                    // cliques
-                    ...(hasChevron?['14px']:[]),// chevron
+                    '22px',                    // status icon
+                    'minmax(60px,1fr)',         // name (flexible)
+                    '64px',                    // orçamento
+                    ...(hasUpdate?['76px']:[]),// ult.atualização (adsets only)
+                    '34px',                    // vendas
+                    '64px',                    // cpa
+                    '64px',                    // gasto
+                    '64px',                    // faturamento
+                    '66px',                    // lucro (negativo mais largo)
+                    '42px',                    // roas
+                    '52px',                    // margem
+                    '52px',                    // roi
+                    '28px',                    // ic
+                    '62px',                    // cpi
+                    '62px',                    // cpc
+                    '44px',                    // ctr
+                    '62px',                    // cpm
+                    '46px',                    // impressões
+                    '40px',                    // cliques
+                    ...(hasChevron?['12px']:[]),// chevron
                   ].join(' ')
 
                   return (
                     <div className="space-y-1">
-                      {/* ── Header ─────────────────────────────────────── */}
-                      <div className="overflow-x-auto">
+                      {/* ── Header + Rows num único container ──────────── */}
+                      <div>
+                        {/* Header */}
                         <div style={{gridTemplateColumns:GT}}
-                             className="hidden lg:grid gap-x-1.5 px-2 pb-1.5
-                                        text-[9px] font-semibold uppercase tracking-[0.08em]">
+                             className="hidden lg:grid gap-x-1 px-2 pb-1.5
+                                        text-[8.5px] font-semibold uppercase tracking-[0.07em]">
                           <span/>{/* status */}
                           <span className="text-slate-600 capitalize">{levelLabel}</span>
-                          <span className="text-right text-slate-600">Orçamento</span>
-                          {hasUpdate&&<span className="text-right text-slate-600">Atualização</span>}
-                          {sortBtn('approvedOrdersCount','Vendas')}
+                          <span className="text-right text-slate-600">Orç.</span>
+                          {hasUpdate&&<span className="text-right text-slate-600">Atual.</span>}
+                          {sortBtn('approvedOrdersCount','Vnd.')}
                           {sortBtn('cpa','CPA')}
                           {sortBtn('spend','Gasto')}
                           {sortBtn('revenue','Fat.')}
                           {sortBtn('profit','Lucro')}
                           {sortBtn('roas','ROAS')}
-                          {sortBtn('margin','Margem')}
+                          {sortBtn('margin','Mgm.')}
                           {sortBtn('roi','ROI')}
                           {sortBtn('ic','IC')}
                           {sortBtn('cpi','CPI')}
                           {sortBtn('cpc','CPC')}
                           {sortBtn('ctr','CTR')}
                           {sortBtn('cpm','CPM')}
-                          {sortBtn('impressions','Impressões')}
-                          {sortBtn('clicks','Cliques')}
+                          {sortBtn('impressions','Impr.')}
+                          {sortBtn('clicks','Clic.')}
                           {hasChevron&&<span/>}
                         </div>
-                      </div>
 
-                      {/* ── Rows ───────────────────────────────────────── */}
-                      <div className="overflow-x-auto">
-                        <div style={{minWidth:'1180px'}} className="space-y-1">
+                        {/* Rows */}
+                        <div className="space-y-1">
                           {filtered.map(c => {
                             const pc       = c.platform==='meta'?'#1877f2':'#34a853'
                             const isActive = c.status==='ACTIVE'||c.status==='ENABLED'
@@ -1093,33 +1093,27 @@ export default function UTMifyPage() {
                               <div key={c.id}
                                 onClick={()=>onRowClick?.(c)}
                                 style={{gridTemplateColumns:GT}}
-                                className={`card px-2 py-2 grid gap-x-1.5 items-center transition-all
+                                className={`card px-2 py-2 grid gap-x-1 items-center transition-all
                                   ${isClickable?'cursor-pointer hover:border-slate-600/60 group':''}`}>
 
                                 {/* status icon */}
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <div className="w-5 h-5 rounded flex items-center justify-center text-[7px] font-black"
+                                <div className="flex flex-col items-center gap-px">
+                                  <div className="w-4 h-4 rounded flex items-center justify-center text-[6px] font-black"
                                     style={{background:`${pc}20`,border:`1px solid ${pc}40`,color:pc}}>
                                     {c.platform==='meta'?'FB':'GL'}
                                   </div>
                                   {isActive
-                                    ?<Play  size={6} className="text-emerald-400"/>
-                                    :<Pause size={6} className="text-slate-700"/>}
+                                    ?<Play  size={5} className="text-emerald-400"/>
+                                    :<Pause size={5} className="text-slate-700"/>}
                                 </div>
 
                                 {/* name */}
                                 <div className="min-w-0">
-                                  <p className={`text-xs font-semibold truncate
+                                  <p className={`text-[11px] font-semibold truncate leading-tight
                                     ${isClickable?'group-hover:text-white':''} text-slate-200`}
                                     title={c.name}>{c.name}</p>
-                                  <div className="flex items-center gap-1 mt-px">
-                                    {c.channel&&(
-                                      <span className="text-[8px] font-bold uppercase px-1 py-px rounded"
-                                        style={{color:pc,background:`${pc}15`,border:`1px solid ${pc}30`}}>
-                                        {c.channel}
-                                      </span>
-                                    )}
-                                    <span className={`text-[8px] font-bold uppercase px-1 py-px rounded
+                                  <div className="flex items-center gap-0.5 mt-px">
+                                    <span className={`text-[7px] font-bold uppercase px-0.5 py-px rounded
                                       ${isActive
                                         ?'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
                                         :'text-slate-600 bg-surface-raised border border-surface-border'}`}>
@@ -1129,81 +1123,81 @@ export default function UTMifyPage() {
                                 </div>
 
                                 {/* orçamento */}
-                                <span className="text-[11px] tabular-nums text-right text-slate-400">{budget(c)}</span>
+                                <span className="text-[10px] tabular-nums text-right text-slate-500">{budget(c)}</span>
 
                                 {/* ult. atualização (adsets only) */}
                                 {hasUpdate&&(
-                                  <span className="text-[10px] tabular-nums text-right text-slate-600">{updStr}</span>
+                                  <span className="text-[9px] tabular-nums text-right text-slate-600 leading-tight">{updStr}</span>
                                 )}
 
                                 {/* vendas */}
-                                <span className={`text-xs font-semibold tabular-nums text-right
+                                <span className={`text-[10px] font-semibold tabular-nums text-right
                                   ${hi('approvedOrdersCount', c.approvedOrdersCount>0?'text-emerald-300':'text-slate-600')}`}>
                                   {c.approvedOrdersCount}
                                 </span>
 
                                 {/* cpa */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('cpa','text-slate-400')}`}>{cur(c.cpa)}</span>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('cpa','text-slate-400')}`}>{cur(c.cpa)}</span>
 
                                 {/* gasto */}
-                                <span className={`text-xs font-semibold tabular-nums text-right ${hi('spend','text-blue-300')}`}>{cur(c.spend)}</span>
+                                <span className={`text-[10px] font-semibold tabular-nums text-right ${hi('spend','text-blue-300')}`}>{cur(c.spend)}</span>
 
                                 {/* faturamento */}
-                                <span className={`text-xs font-semibold tabular-nums text-right ${hi('revenue','text-emerald-300')}`}>{cur(c.revenue)}</span>
+                                <span className={`text-[10px] font-semibold tabular-nums text-right ${hi('revenue','text-emerald-300')}`}>{cur(c.revenue)}</span>
 
                                 {/* lucro */}
-                                <span className={`text-xs font-semibold tabular-nums text-right
+                                <span className={`text-[10px] font-semibold tabular-nums text-right
                                   ${hi('profit', c.profit>=0?'text-emerald-300':'text-rose-300')}`}>
                                   {cur(c.profit)}
                                 </span>
 
                                 {/* roas */}
-                                <span className={`text-xs font-bold tabular-nums text-right
+                                <span className={`text-[10px] font-bold tabular-nums text-right
                                   ${hi('roas', c.roas>=1?'text-amber-300':'text-slate-500')}`}>
                                   {c.roas.toFixed(2)}×
                                 </span>
 
                                 {/* margem */}
-                                <span className={`text-[11px] tabular-nums text-right
+                                <span className={`text-[10px] tabular-nums text-right
                                   ${hi('margin', c.margin==null?'text-slate-700':c.margin>=0?'text-emerald-300':'text-rose-300')}`}>
                                   {c.margin==null?'—':`${c.margin.toFixed(1)}%`}
                                 </span>
 
                                 {/* roi */}
-                                <span className={`text-[11px] font-bold tabular-nums text-right
+                                <span className={`text-[10px] font-bold tabular-nums text-right
                                   ${hi('roi', c.roi>=0?'text-emerald-300':'text-rose-300')}`}>
                                   {pct(c.roi,1)}
                                 </span>
 
                                 {/* ic */}
-                                <span className={`text-[11px] tabular-nums text-right
+                                <span className={`text-[10px] tabular-nums text-right
                                   ${hi('ic', c.ic!=null&&c.ic>0?'text-slate-300':'text-slate-700')}`}>
                                   {num(c.ic)}
                                 </span>
 
                                 {/* cpi */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('cpi','text-slate-400')}`}>{cur(c.cpi)}</span>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('cpi','text-slate-400')}`}>{cur(c.cpi)}</span>
 
                                 {/* cpc */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('cpc','text-slate-400')}`}>{cur(c.cpc)}</span>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('cpc','text-slate-400')}`}>{cur(c.cpc)}</span>
 
                                 {/* ctr */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('ctr','text-slate-400')}`}>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('ctr','text-slate-400')}`}>
                                   {c.ctr==null?'—':`${c.ctr.toFixed(2)}%`}
                                 </span>
 
                                 {/* cpm */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('cpm','text-slate-400')}`}>{cur(c.cpm)}</span>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('cpm','text-slate-400')}`}>{cur(c.cpm)}</span>
 
                                 {/* impressões */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('impressions','text-slate-500')}`}>{num(c.impressions)}</span>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('impressions','text-slate-500')}`}>{num(c.impressions)}</span>
 
                                 {/* cliques */}
-                                <span className={`text-[11px] tabular-nums text-right ${hi('clicks','text-slate-400')}`}>{num(c.clicks)}</span>
+                                <span className={`text-[10px] tabular-nums text-right ${hi('clicks','text-slate-400')}`}>{num(c.clicks)}</span>
 
                                 {/* chevron */}
                                 {hasChevron&&(
-                                  <ChevronRight size={12}
+                                  <ChevronRight size={11}
                                     className="text-slate-700 group-hover:text-slate-400 transition-colors justify-self-center"/>
                                 )}
                               </div>

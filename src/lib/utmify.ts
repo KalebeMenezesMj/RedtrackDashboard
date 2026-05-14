@@ -184,6 +184,7 @@ export interface UTMifyDashboard {
   name:        string
   userId:      string
   description: string | null
+  currency:    string   // 'BRL' | 'USD' | etc.
 }
 
 export interface UTMifyHourPoint   { hour:      number; count: number }
@@ -200,6 +201,7 @@ export interface UTMifyPaymentMethod {
 }
 
 export interface UTMifyKPIData {
+  currency:          string   // 'BRL' | 'USD' | etc. — detectado da API ou por país
   // ── Financeiro ──────────────────────────────────────────────────────────────
   revenue:           number   // comissions.net / 100
   revenueGross:      number   // comissions.gross / 100
@@ -298,8 +300,15 @@ export async function fetchDashboards(): Promise<UTMifyDashboard[]> {
     cache:   'no-store',
   })
   if (!res.ok) throw new Error(`UTMify /dashboards falhou (${res.status})`)
-  const data: { dashboards?: UTMifyDashboard[] } = await res.json()
-  return data.dashboards ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: { dashboards?: any[] } = await res.json()
+  return (data.dashboards ?? []).map((d: any) => ({
+    id:          String(d.id ?? ''),
+    name:        String(d.name ?? ''),
+    userId:      String(d.userId ?? ''),
+    description: d.description ?? null,
+    currency:    String(d.currency ?? d.currencyCode ?? 'BRL'),
+  }))
 }
 
 export async function fetchDashboardInfo(
@@ -402,7 +411,24 @@ export async function fetchDashboardInfo(
 
   const roaMult = d.analytics?.roas ?? d.analytics?.roi ?? 0
 
+  // ── Detecção de moeda ─────────────────────────────────────────────────────
+  // 1) campo explícito no response (ex: d.currency / d.currencyCode)
+  // 2) inferido pelo país do cliente (USA → USD, Brazil → BRL)
+  // 3) fallback BRL
+  const detectCurrency = (): string => {
+    const explicit = d.currency ?? d.currencyCode ?? d.dashboard?.currency
+    if (typeof explicit === 'string' && explicit.length >= 3) return explicit.toUpperCase()
+    const countries: string[] = (d.ordersCount?.byCustomerCountry ?? []).map(
+      (x: { country: string }) => (x.country ?? '').toLowerCase(),
+    )
+    if (countries.some(c => c.includes('united states') || c.includes('usa'))) return 'USD'
+    if (countries.some(c => c.includes('brazil') || c.includes('brasil')))     return 'BRL'
+    return 'BRL'
+  }
+  const currency = detectCurrency()
+
   return {
+    currency,
     // Financeiro
     revenue:           c2r(d.comissions?.net),
     revenueGross:      c2r(d.comissions?.gross),
@@ -674,7 +700,19 @@ export async function fetchDashboardInfoFiltered(
 
   const roaMult = d.analytics?.roas ?? d.analytics?.roi ?? 0
 
+  const detectCurrency2 = (): string => {
+    const explicit = d.currency ?? d.currencyCode ?? d.dashboard?.currency
+    if (typeof explicit === 'string' && explicit.length >= 3) return explicit.toUpperCase()
+    const countries: string[] = (d.ordersCount?.byCustomerCountry ?? []).map(
+      (x: { country: string }) => (x.country ?? '').toLowerCase(),
+    )
+    if (countries.some(c => c.includes('united states') || c.includes('usa'))) return 'USD'
+    if (countries.some(c => c.includes('brazil') || c.includes('brasil')))     return 'BRL'
+    return 'BRL'
+  }
+
   return {
+    currency:          detectCurrency2(),
     revenue:           c2r(d.comissions?.net),
     revenueGross:      c2r(d.comissions?.gross),
     revenuePending:    c2r(d.comissions?.pendingGrossRevenue),
