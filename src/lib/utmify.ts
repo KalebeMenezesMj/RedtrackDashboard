@@ -16,6 +16,34 @@ let refreshExpiresAt:     number        = 0
 let cached2FAToken:       string | null = null
 let token2FAExpiresAt:    number        = 0
 
+// ─── Response cache (server-side, in-memory, TTL) ─────────────────────────────
+// Evita bater na API do UTMify a cada request — dados de analytics mudam a cada
+// poucos minutos, cache de 60 s é suficiente e acelera drasticamente as recargas.
+
+interface _CacheEntry { data: unknown; expiresAt: number }
+const _cache = new Map<string, _CacheEntry>()
+
+function _get<T>(key: string): T | null {
+  const e = _cache.get(key)
+  if (!e) return null
+  if (Date.now() > e.expiresAt) { _cache.delete(key); return null }
+  return e.data as T
+}
+
+function _set(key: string, data: unknown, ttlSecs: number) {
+  _cache.set(key, { data, expiresAt: Date.now() + ttlSecs * 1000 })
+}
+
+/** Invalida todas as entradas de um dashboard (ex: quando usuário força atualização). */
+export function invalidateDashboardCache(dashboardId: string) {
+  for (const k of _cache.keys()) {
+    if (k.includes(dashboardId)) _cache.delete(k)
+  }
+}
+
+/** Invalida todo o cache (ex: mudança de credenciais). */
+export function invalidateAllCache() { _cache.clear() }
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 async function login(): Promise<string> {
@@ -294,6 +322,10 @@ export function localDateToUTC(date: string, end = false): string {
 // ─── Funções exportadas ───────────────────────────────────────────────────────
 
 export async function fetchDashboards(): Promise<UTMifyDashboard[]> {
+  const cacheKey = 'dashboards'
+  const hit = _get<UTMifyDashboard[]>(cacheKey)
+  if (hit) return hit
+
   const token = await getToken()
   const res   = await fetch(`${BASE_URL}/dashboards`, {
     headers: reqHeaders(token),
@@ -302,13 +334,15 @@ export async function fetchDashboards(): Promise<UTMifyDashboard[]> {
   if (!res.ok) throw new Error(`UTMify /dashboards falhou (${res.status})`)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: { dashboards?: any[] } = await res.json()
-  return (data.dashboards ?? []).map((d: any) => ({
+  const result = (data.dashboards ?? []).map((d: any) => ({
     id:          String(d.id ?? ''),
     name:        String(d.name ?? ''),
     userId:      String(d.userId ?? ''),
     description: d.description ?? null,
     currency:    String(d.currency ?? d.currencyCode ?? 'BRL'),
   }))
+  _set(cacheKey, result, 300) // 5 min — dashboards mudam raramente
+  return result
 }
 
 export async function fetchDashboardInfo(
@@ -316,6 +350,10 @@ export async function fetchDashboardInfo(
   from: string,
   to:   string,
 ): Promise<UTMifyKPIData> {
+  const cacheKey = `kpis:${dashboardId}:${from}:${to}`
+  const hit = _get<UTMifyKPIData>(cacheKey)
+  if (hit) return hit
+
   const token = await getToken()
 
   const res = await fetch(`${BASE_URL}/orders/dashboard-info`, {
@@ -411,24 +449,9 @@ export async function fetchDashboardInfo(
 
   const roaMult = d.analytics?.roas ?? d.analytics?.roi ?? 0
 
-  // ── Detecção de moeda ─────────────────────────────────────────────────────
-  // 1) campo explícito no response (ex: d.currency / d.currencyCode)
-  // 2) inferido pelo país do cliente (USA → USD, Brazil → BRL)
-  // 3) fallback BRL
-  const detectCurrency = (): string => {
-    const explicit = d.currency ?? d.currencyCode ?? d.dashboard?.currency
-    if (typeof explicit === 'string' && explicit.length >= 3) return explicit.toUpperCase()
-    const countries: string[] = (d.ordersCount?.byCustomerCountry ?? []).map(
-      (x: { country: string }) => (x.country ?? '').toLowerCase(),
-    )
-    if (countries.some(c => c.includes('united states') || c.includes('usa'))) return 'USD'
-    if (countries.some(c => c.includes('brazil') || c.includes('brasil')))     return 'BRL'
-    return 'BRL'
-  }
-  const currency = detectCurrency()
-
-  return {
-    currency,
+  const result: UTMifyKPIData = {
+    // currency vem do objeto dashboard (GET /dashboards); fallback BRL
+    currency: 'BRL',
     // Financeiro
     revenue:           c2r(d.comissions?.net),
     revenueGross:      c2r(d.comissions?.gross),
@@ -500,6 +523,8 @@ export async function fetchDashboardInfo(
     topCountries,
     profitByHour,
   }
+  _set(cacheKey, result, 60) // 60 s — dados de KPI
+  return result
 }
 
 export async function fetchFilters(dashboardId: string): Promise<{
@@ -538,6 +563,10 @@ export interface UTMifyProfile {
 
 // Busca perfis Meta Ads com suas ad accounts (POST /dashboards/meta/profiles/list)
 export async function fetchMetaProfiles(dashboardId: string): Promise<UTMifyProfile[]> {
+  const cacheKey = `meta-profiles:${dashboardId}`
+  const hit = _get<UTMifyProfile[]>(cacheKey)
+  if (hit) return hit
+
   const token = await getToken()
   const res   = await fetch(`${BASE_URL}/dashboards/meta/profiles/list`, {
     method:  'POST',
@@ -547,7 +576,7 @@ export async function fetchMetaProfiles(dashboardId: string): Promise<UTMifyProf
   })
   if (!res.ok) throw new Error(`UTMify /dashboards/meta/profiles/list falhou (${res.status})`)
   const data: unknown[] = await res.json()
-  return (Array.isArray(data) ? data : []).map((p: unknown) => {
+  const result = (Array.isArray(data) ? data : []).map((p: unknown) => {
     const profile = p as Record<string, unknown>
     return {
       id:           String(profile.id ?? ''),
@@ -563,10 +592,16 @@ export async function fetchMetaProfiles(dashboardId: string): Promise<UTMifyProf
       platform: 'meta' as const,
     }
   })
+  _set(cacheKey, result, 300) // 5 min — perfis mudam raramente
+  return result
 }
 
 // Busca perfis Google Ads com suas ad accounts (POST /dashboards/google/profiles/list)
 export async function fetchGoogleProfiles(dashboardId: string): Promise<UTMifyProfile[]> {
+  const cacheKey = `google-profiles:${dashboardId}`
+  const hit = _get<UTMifyProfile[]>(cacheKey)
+  if (hit) return hit
+
   const token = await getToken()
   const res   = await fetch(`${BASE_URL}/dashboards/google/profiles/list`, {
     method:  'POST',
@@ -576,7 +611,7 @@ export async function fetchGoogleProfiles(dashboardId: string): Promise<UTMifyPr
   })
   if (!res.ok) throw new Error(`UTMify /dashboards/google/profiles/list falhou (${res.status})`)
   const data: unknown[] = await res.json()
-  return (Array.isArray(data) ? data : []).map((p: unknown) => {
+  const result = (Array.isArray(data) ? data : []).map((p: unknown) => {
     const profile = p as Record<string, unknown>
     return {
       id:           String(profile.id ?? ''),
@@ -592,6 +627,8 @@ export async function fetchGoogleProfiles(dashboardId: string): Promise<UTMifyPr
       platform: 'google' as const,
     }
   })
+  _set(cacheKey, result, 300) // 5 min — perfis mudam raramente
+  return result
 }
 
 // Filters opcionais para dashboard-info por conta / plataforma
@@ -611,6 +648,17 @@ export async function fetchDashboardInfoFiltered(
   to:          string,
   filters:     UTMifyFilters = {},
 ): Promise<UTMifyKPIData> {
+  const cacheKey = `kpis-filtered:${dashboardId}:${from}:${to}:${JSON.stringify({
+    platforms:          [...(filters.platforms          ?? [])].sort(),
+    trafficSource:      filters.trafficSource ?? null,
+    metaAdAccountIds:   [...(filters.metaAdAccountIds   ?? [])].sort(),
+    googleAdAccountIds: [...(filters.googleAdAccountIds ?? [])].sort(),
+    tiktokAdAccountIds: [...(filters.tiktokAdAccountIds ?? [])].sort(),
+    kwaiAdAccountIds:   [...(filters.kwaiAdAccountIds   ?? [])].sort(),
+  })}`
+  const hit = _get<UTMifyKPIData>(cacheKey)
+  if (hit) return hit
+
   const token = await getToken()
 
   const body = {
@@ -700,19 +748,8 @@ export async function fetchDashboardInfoFiltered(
 
   const roaMult = d.analytics?.roas ?? d.analytics?.roi ?? 0
 
-  const detectCurrency2 = (): string => {
-    const explicit = d.currency ?? d.currencyCode ?? d.dashboard?.currency
-    if (typeof explicit === 'string' && explicit.length >= 3) return explicit.toUpperCase()
-    const countries: string[] = (d.ordersCount?.byCustomerCountry ?? []).map(
-      (x: { country: string }) => (x.country ?? '').toLowerCase(),
-    )
-    if (countries.some(c => c.includes('united states') || c.includes('usa'))) return 'USD'
-    if (countries.some(c => c.includes('brazil') || c.includes('brasil')))     return 'BRL'
-    return 'BRL'
-  }
-
-  return {
-    currency:          detectCurrency2(),
+  const result: UTMifyKPIData = {
+    currency: 'BRL',
     revenue:           c2r(d.comissions?.net),
     revenueGross:      c2r(d.comissions?.gross),
     revenuePending:    c2r(d.comissions?.pendingGrossRevenue),
@@ -778,6 +815,8 @@ export async function fetchDashboardInfoFiltered(
     topCountries,
     profitByHour,
   }
+  _set(cacheKey, result, 60) // 60 s — dados de KPI filtrado
+  return result
 }
 
 // ─── Tipos de Campanhas ───────────────────────────────────────────────────────
@@ -888,6 +927,10 @@ export async function fetchMetaCampaigns(
   to:           string,
   opts:         SearchObjectsOptions = {},
 ): Promise<UTMifyCampaignRow[]> {
+  const cacheKey = `meta-campaigns:${dashboardId}:${from}:${to}:${opts.level ?? 'campaign'}:${opts.status ?? ''}:${opts.nameContains ?? ''}:${JSON.stringify([...(opts.adAccountIds ?? [])].sort())}`
+  const hit = _get<UTMifyCampaignRow[]>(cacheKey)
+  if (hit) return hit
+
   const token = await get2FAToken()
   const res = await fetch(`${BASE_URL}/orders/search-objects`, {
     method:  'POST',
@@ -909,7 +952,9 @@ export async function fetchMetaCampaigns(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d: any = await res.json()
   const results: unknown[] = Array.isArray(d) ? d : (d.results ?? [])
-  return results.map(r => parseCampaignRow(r, 'meta'))
+  const mapped = results.map(r => parseCampaignRow(r, 'meta'))
+  _set(cacheKey, mapped, 60) // 60 s — dados de campanhas
+  return mapped
 }
 
 export async function fetchGoogleCampaigns(
@@ -918,6 +963,10 @@ export async function fetchGoogleCampaigns(
   to:           string,
   opts:         SearchObjectsOptions = {},
 ): Promise<UTMifyCampaignRow[]> {
+  const cacheKey = `google-campaigns:${dashboardId}:${from}:${to}:${opts.level ?? 'campaign'}:${opts.status ?? ''}:${opts.nameContains ?? ''}:${JSON.stringify([...(opts.adAccountIds ?? [])].sort())}`
+  const hit = _get<UTMifyCampaignRow[]>(cacheKey)
+  if (hit) return hit
+
   const token = await get2FAToken()
   const res = await fetch(`${BASE_URL}/orders/search-objects/google`, {
     method:  'POST',
@@ -940,7 +989,9 @@ export async function fetchGoogleCampaigns(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d: any = await res.json()
   const results: unknown[] = Array.isArray(d) ? d : (d.results ?? [])
-  return results.map(r => parseCampaignRow(r, 'google'))
+  const mapped = results.map(r => parseCampaignRow(r, 'google'))
+  _set(cacheKey, mapped, 60) // 60 s — dados de campanhas
+  return mapped
 }
 
 export interface UTMifyMetaAdAccount {

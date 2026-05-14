@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   DollarSign, TrendingUp, Activity, ShoppingCart, MousePointerClick,
   RefreshCw, AlertCircle, BarChart3, Package, Zap, Menu,
@@ -118,8 +118,8 @@ function MiniKPI({ icon:Icon, label, value, color='#64748b', loading=false }: {
 }
 
 /* ─── Platform bar ───────────────────────────────────────────────────────── */
-function PlatBar({ label, spend, clicks, pageViews, total, color }: {
-  label:string; spend:number; clicks:number; pageViews:number; total:number; color:string
+function PlatBar({ label, spend, clicks, pageViews, total, color, currency }: {
+  label:string; spend:number; clicks:number; pageViews:number; total:number; color:string; currency:string
 }) {
   const pct = total > 0 ? (spend/total)*100 : 0
   return (
@@ -129,7 +129,7 @@ function PlatBar({ label, spend, clicks, pageViews, total, color }: {
         <div className="flex items-center gap-4 text-[11px] tabular-nums shrink-0">
           <span className="text-slate-600">{formatNumber(clicks)} cliques</span>
           <span className="text-slate-600">{formatNumber(pageViews)} views</span>
-          <span className="text-slate-200 font-semibold">{formatCurrency(spend)}</span>
+          <span className="text-slate-200 font-semibold">{formatCurrency(spend, currency)}</span>
         </div>
       </div>
       <div className="h-1.5 rounded-full bg-surface-raised overflow-hidden">
@@ -154,12 +154,13 @@ function StatRow({ label, value, sub }: { label:string; value:string; sub?:strin
 
 /* ─── Drawer lateral ─────────────────────────────────────────────────────── */
 interface DrawerProps {
-  title:string; subtitle:string; platform?:string
+  title:string; subtitle:string; platform?:string; currency:string
   kpis:UTMifyKPIData|null; loading:boolean; error:string|null; onClose:()=>void
 }
-function Drawer({ title, subtitle, platform, kpis, loading, error, onClose }: DrawerProps) {
+function Drawer({ title, subtitle, platform, currency, kpis, loading, error, onClose }: DrawerProps) {
   const ip = (kpis?.profit ?? 0) >= 0
   function fmtPct(v:number){ const s=v>=0?'+':'−'; return `${s}${Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%` }
+  const fmtCur = (v: number) => formatCurrency(v, currency)
   const platColor = platform ? (PLAT_COLORS[platform] ?? '#64748b') : '#a78bfa'
 
   return (
@@ -188,12 +189,12 @@ function Drawer({ title, subtitle, platform, kpis, loading, error, onClose }: Dr
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600 mb-3">Financeiro</p>
           <div className="grid grid-cols-2 gap-2">
-            <MiniKPI icon={DollarSign} label="Receita"  value={loading?'…':formatCurrency(kpis?.revenue??0)}  color="#34d399" loading={loading} />
-            <MiniKPI icon={Activity}   label="Gasto"    value={loading?'…':formatCurrency(kpis?.spend??0)}    color="#60a5fa" loading={loading} />
-            <MiniKPI icon={TrendingUp} label="Lucro"    value={loading?'…':formatCurrency(kpis?.profit??0)}   color={ip?'#34d399':'#f87171'} loading={loading} />
+            <MiniKPI icon={DollarSign} label="Receita"  value={loading?'…':fmtCur(kpis?.revenue??0)}  color="#34d399" loading={loading} />
+            <MiniKPI icon={Activity}   label="Gasto"    value={loading?'…':fmtCur(kpis?.spend??0)}    color="#60a5fa" loading={loading} />
+            <MiniKPI icon={TrendingUp} label="Lucro"    value={loading?'…':fmtCur(kpis?.profit??0)}   color={ip?'#34d399':'#f87171'} loading={loading} />
             <MiniKPI icon={BarChart3}  label="ROI"      value={loading?'…':fmtPct(kpis?.roi??0)}              color={(kpis?.roi??0)>=0?'#a78bfa':'#fbbf24'} loading={loading} />
-            <MiniKPI icon={Package}    label="CPA"      value={loading?'…':formatCurrency(kpis?.cpa??0)}      color="#67e8f9" loading={loading} />
-            <MiniKPI icon={Package}    label="Ticket"   value={loading?'…':formatCurrency(kpis?.avgTicket??0)} color="#fb923c" loading={loading} />
+            <MiniKPI icon={Package}    label="CPA"      value={loading?'…':fmtCur(kpis?.cpa??0)}      color="#67e8f9" loading={loading} />
+            <MiniKPI icon={Package}    label="Ticket"   value={loading?'…':fmtCur(kpis?.avgTicket??0)} color="#fb923c" loading={loading} />
           </div>
         </div>
         <div>
@@ -229,7 +230,7 @@ function Drawer({ title, subtitle, platform, kpis, loading, error, onClose }: Dr
                 <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-raised/50 border border-surface-border/40">
                   <span className="text-[10px] font-bold text-slate-700 w-5 text-center tabular-nums shrink-0">{i+1}</span>
                   <div className="flex-1 min-w-0"><p className="text-[11px] font-medium text-slate-300 truncate">{p.name}</p><p className="text-[10px] text-slate-600">{formatNumber(p.count)} pedidos</p></div>
-                  <span className="text-[11px] font-semibold text-emerald-300 tabular-nums shrink-0">{formatCurrency(p.revenue)}</span>
+                  <span className="text-[11px] font-semibold text-emerald-300 tabular-nums shrink-0">{fmtCur(p.revenue)}</span>
                 </div>
               ))}
             </div>
@@ -269,12 +270,17 @@ export default function UTMifyPage() {
   const [kpis,         setKpis]         = useState<UTMifyKPIData | null>(null)
   const [currency,     setCurrency]     = useState<string>('BRL')
   const [profiles,     setProfiles]     = useState<UTMifyProfile[]>([])
-  const [loading,      setLoading]      = useState(false)
+  const [loading,      setLoading]      = useState(true) // true para mostrar skeleton no primeiro load
+  const [isRefreshing, setIsRefreshing] = useState(false) // spinner sutil ao re-fetch com dados existentes
   const [profLoading,  setProfLoading]  = useState(false)
   const [error,        setError]        = useState<string | null>(null)
   const [apiStatus,    setApiStatus]    = useState<'connected'|'error'|'loading'>('loading')
   const [lastUpdate,   setLastUpdate]   = useState('')
   const [configured,   setConfigured]   = useState(true)
+
+  // Cache client-side para drill-down de campanhas (evita re-fetch ao navegar back)
+  const adSetsCache = useRef<Map<string, UTMifyCampaignRow[]>>(new Map())
+  const adsCache    = useRef<Map<string, UTMifyCampaignRow[]>>(new Map())
 
   // Campanhas — nível hierarchy
   type CampLevel = 'campaigns' | 'adsets' | 'ads'
@@ -300,35 +306,52 @@ export default function UTMifyPage() {
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [drawerError,   setDrawerError]   = useState<string|null>(null)
 
-  /* ── Boot: carrega dashboards ─────────────────────────────────────────── */
+  /* ── Boot: carrega dashboards + KPIs em uma única requisição ────────── */
   useEffect(() => {
     async function boot() {
+      setLoading(true)
       try {
-        const r = await fetch('/api/utmify/dashboards')
+        const p = new URLSearchParams({ from: dateRange.from, to: dateRange.to })
+        const r = await fetch(`/api/utmify/init?${p}`)
         const j = await r.json()
-        if (!j.ok) { if (j.error?.includes('não configurados')) setConfigured(false); return }
+        if (!j.ok) {
+          if (j.error?.includes('não configurados')) setConfigured(false)
+          setApiStatus('error'); setError(j.error ?? 'Falha')
+          return
+        }
         setDashboards(j.dashboards ?? [])
-        if (j.dashboards?.length > 0) setDashboardId(j.dashboards[0].id)
-      } catch { /* silencia */ }
+        if (j.dashboardId) {
+          setDashboardId(j.dashboardId)
+          setCurrency(j.currency ?? 'BRL')
+        }
+        if (j.kpis) { setKpis(j.kpis); setApiStatus('connected'); setLastUpdate(new Date().toLocaleTimeString('pt-BR')) }
+      } catch(e) {
+        setError(e instanceof Error ? e.message : 'Erro'); setApiStatus('error')
+      } finally { setLoading(false) }
     }
     boot()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /* ── Carrega KPIs quando dashboardId ou dateRange mudam ──────────────── */
   const fetchKpis = useCallback(async (range: DateRange, dId: string) => {
     if (!dId) return
-    setLoading(true); setError(null); setApiStatus('loading')
+    // Se já temos dados, usa refresh sutil; senão mostra skeleton completo
+    const hasData = kpis !== null
+    if (hasData) { setIsRefreshing(true); setError(null) }
+    else         { setLoading(true);      setError(null); setApiStatus('loading') }
     try {
       const p = new URLSearchParams({ from:range.from, to:range.to, dashboardId:dId })
       const r = await fetch(`/api/utmify?${p}`)
       const j = await r.json()
       if (!j.ok) throw new Error(j.error ?? 'Falha')
-      setKpis(j.kpis); setCurrency(j.kpis?.currency ?? 'BRL'); setApiStatus('connected')
+      setKpis(j.kpis); setApiStatus('connected')
       setLastUpdate(new Date().toLocaleTimeString('pt-BR'))
     } catch(e:unknown) {
       setError(e instanceof Error ? e.message : 'Erro'); setApiStatus('error')
-    } finally { setLoading(false) }
-  }, [])
+    } finally { setLoading(false); setIsRefreshing(false) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpis])
 
   /* ── Carrega perfis quando muda aba ou dashboardId ───────────────────── */
   const fetchProfiles = useCallback(async (dId: string) => {
@@ -360,8 +383,15 @@ export default function UTMifyPage() {
 
   /* ── Drill-down: campanha → conjuntos ──────────────────────────────────── */
   async function drillToAdSets(campaign: UTMifyCampaignRow) {
-    setSelCampaign(campaign); setCampLevel('adsets'); setAdSets([]); setAds([])
-    setCampSearch(''); setCampLoading(true); setCampError(null)
+    setSelCampaign(campaign); setCampLevel('adsets'); setAds([])
+    setCampSearch(''); setCampError(null)
+
+    // Mostra cache imediatamente enquanto re-fetcha em background
+    const cKey = `${campaign.id}:${campaign.platform}`
+    const cached = adSetsCache.current.get(cKey)
+    if (cached) { setAdSets(cached); setCampLoading(false) }
+    else        { setAdSets([]); setCampLoading(true) }
+
     try {
       const level = campaign.platform === 'google' ? 'adGroup' : 'adset'
       const p = new URLSearchParams({
@@ -371,40 +401,80 @@ export default function UTMifyPage() {
       const r = await fetch(`/api/utmify/campaigns?${p}`)
       const j = await r.json()
       if (!j.ok) throw new Error(j.error)
-      // Filtra client-side pelo campaignId pai
       const all: UTMifyCampaignRow[] = j.campaigns ?? []
       const filtered = all.filter(a => !a.campaignId || a.campaignId === campaign.id)
-      setAdSets(filtered.length > 0 ? filtered : all)
-    } catch(e:unknown) { setCampError(e instanceof Error ? e.message : 'Erro ao carregar conjuntos') }
+      const result = filtered.length > 0 ? filtered : all
+      adSetsCache.current.set(cKey, result)
+      setAdSets(result)
+    } catch(e:unknown) {
+      if (!cached) setCampError(e instanceof Error ? e.message : 'Erro ao carregar conjuntos')
+    }
     finally { setCampLoading(false) }
   }
 
   /* ── Drill-down: conjunto → anúncios ───────────────────────────────────── */
   async function drillToAds(adset: UTMifyCampaignRow) {
-    setSelAdSet(adset); setCampLevel('ads'); setAds([])
-    setCampSearch(''); setCampLoading(true); setCampError(null)
+    setSelAdSet(adset); setCampLevel('ads')
+    setCampSearch(''); setCampError(null)
+
+    const cKey = `${adset.id}:${adset.platform}`
+    const cached = adsCache.current.get(cKey)
+    if (cached) { setAds(cached); setCampLoading(false) }
+    else        { setAds([]); setCampLoading(true) }
+
     try {
-      const level = adset.platform === 'google' ? 'ad' : 'ad'
       const p = new URLSearchParams({
         from: dateRange.from, to: dateRange.to, dashboardId,
-        platform: adset.platform, level,
+        platform: adset.platform, level: 'ad',
       })
       const r = await fetch(`/api/utmify/campaigns?${p}`)
       const j = await r.json()
       if (!j.ok) throw new Error(j.error)
       const all: UTMifyCampaignRow[] = j.campaigns ?? []
-      // Filtra pelo adsetId pai
       const filtered = all.filter(a => !a.adsetId || a.adsetId === adset.id || a.campaignId === selCampaign?.id)
-      setAds(filtered.length > 0 ? filtered : all)
-    } catch(e:unknown) { setCampError(e instanceof Error ? e.message : 'Erro ao carregar anúncios') }
+      const result = filtered.length > 0 ? filtered : all
+      adsCache.current.set(cKey, result)
+      setAds(result)
+    } catch(e:unknown) {
+      if (!cached) setCampError(e instanceof Error ? e.message : 'Erro ao carregar anúncios')
+    }
     finally { setCampLoading(false) }
   }
 
-  useEffect(() => { if (dashboardId) { fetchKpis(dateRange, dashboardId); fetchProfiles(dashboardId) } }, [dashboardId])
-  useEffect(() => { if (dashboardId) fetchKpis(dateRange, dashboardId)  }, [dateRange])
-  useEffect(() => { if (dashboardId && (activeTab === 'contas')) fetchProfiles(dashboardId) }, [activeTab])
+  // Re-fetch KPIs quando dashboard muda (boot já carregou o primeiro; evita re-fetch duplo)
+  const initialLoadDone = useRef(false)
+  useEffect(() => {
+    if (!dashboardId) return
+    if (!initialLoadDone.current) { initialLoadDone.current = true; return } // skip boot dashboard
+    // Limpa caches de drill-down ao trocar dashboard
+    adSetsCache.current.clear(); adsCache.current.clear()
+    fetchKpis(dateRange, dashboardId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardId])
+
+  useEffect(() => {
+    if (!dashboardId) return
+    // Limpa caches ao trocar período
+    adSetsCache.current.clear(); adsCache.current.clear()
+    fetchKpis(dateRange, dashboardId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange])
+
+  // Profiles: carregado apenas quando o usuário navega para a aba Contas
+  useEffect(() => {
+    if (dashboardId && activeTab === 'contas') fetchProfiles(dashboardId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, dashboardId])
+
   useEffect(() => { if (dashboardId && activeTab === 'campanhas') fetchCampaigns(dateRange, dashboardId) }, [activeTab, dashboardId])
   useEffect(() => { if (dashboardId && activeTab === 'campanhas') fetchCampaigns(dateRange, dashboardId) }, [dateRange])
+
+  // Sincroniza currency sempre que o dashboard selecionado mudar
+  useEffect(() => {
+    if (!dashboardId || dashboards.length === 0) return
+    const d = dashboards.find(d => d.id === dashboardId)
+    if (d) setCurrency(d.currency ?? 'BRL')
+  }, [dashboardId, dashboards])
 
   /* ── Drawer: abre para conta específica ───────────────────────────────── */
   async function openAccountDrawer(profile: UTMifyProfile, acc: {id:string;name:string}) {
@@ -438,6 +508,9 @@ export default function UTMifyPage() {
   }
 
   /* ── Computed ─────────────────────────────────────────────────────────── */
+  // Usa a moeda detectada do dashboard (BRL, USD, etc.)
+  const fmtCur = (v: number) => formatCurrency(v, currency)
+
   const isProfit   = (kpis?.profit ?? 0) >= 0
   const totalSpend = kpis ? kpis.platforms.meta + kpis.platforms.google + kpis.platforms.tiktok + kpis.platforms.kwai + kpis.platforms.taboola : 0
 
@@ -490,16 +563,20 @@ export default function UTMifyPage() {
             <div className="flex items-center gap-2">
               {/* Seletor de dashboard — sempre visível */}
               {dashboards.length > 0 && (
-                <select value={dashboardId} onChange={e=>setDashboardId(e.target.value)}
+                <select value={dashboardId} onChange={e=>{
+                  setDashboardId(e.target.value)
+                  const d = dashboards.find(d=>d.id===e.target.value)
+                  if (d) setCurrency(d.currency ?? 'BRL')
+                }}
                   className="h-9 px-3 text-xs font-medium rounded-xl bg-surface-raised border border-surface-border text-slate-300
                              focus:outline-none focus:ring-1 focus:ring-brand-500/50 cursor-pointer hidden sm:block max-w-[180px]">
                   {dashboards.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               )}
               <DateRangePicker value={dateRange} onChange={setDateRange}/>
-              <button onClick={()=>{if(dashboardId){fetchKpis(dateRange,dashboardId);fetchProfiles(dashboardId)}}}
-                disabled={loading||!dashboardId} className="btn-icon !w-9 !h-9">
-                <RefreshCw size={13} className={loading?'animate-spin':''}/>
+              <button onClick={()=>{ if(dashboardId) fetchKpis(dateRange,dashboardId) }}
+                disabled={loading||isRefreshing||!dashboardId} className="btn-icon !w-9 !h-9" title="Atualizar dados">
+                <RefreshCw size={13} className={(loading||isRefreshing)?'animate-spin':''}/>
               </button>
             </div>
           </div>
@@ -519,8 +596,17 @@ export default function UTMifyPage() {
         {/* ── Body com drawer ────────────────────────────────────────────── */}
         <div className="flex flex-1 overflow-hidden relative">
 
+          {/* Banner sutil de re-atualização */}
+          {isRefreshing && (
+            <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-center gap-2
+                            py-1.5 bg-violet-500/10 border-b border-violet-500/20 text-violet-400 text-[11px] font-medium">
+              <Loader2 size={11} className="animate-spin"/>
+              Atualizando dados…
+            </div>
+          )}
+
           {/* Scroll area */}
-          <div className={`flex-1 overflow-y-auto p-5 sm:p-6 transition-all ${drawerOpen?'lg:mr-[420px]':''}`}>
+          <div className={`flex-1 overflow-y-auto p-5 sm:p-6 transition-all ${drawerOpen?'lg:mr-[420px]':''} ${isRefreshing?'pt-8':''}`}>
 
             {/* Not configured */}
             {!configured && (
@@ -559,9 +645,9 @@ export default function UTMifyPage() {
                 <section>
                   <SH icon={DollarSign} title="Financeiro"/>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stagger">
-                    <KCard icon={DollarSign} title="Receita Líquida" value={loading?'—':formatCurrency(kpis?.revenue??0)} color="emerald" loading={loading} sub={kpis?`Bruta: ${formatCurrency(kpis.revenueGross)}`:undefined}/>
-                    <KCard icon={Activity}   title="Gasto em Ads"    value={loading?'—':formatCurrency(kpis?.spend??0)}   color="blue"    loading={loading}/>
-                    <KCard icon={TrendingUp} title="Lucro"           value={loading?'—':formatCurrency(kpis?.profit??0)}  color={isProfit?'emerald':'rose'} loading={loading} sub={kpis?`Margem: ${fmtPct(kpis.profitMargin)}`:undefined}/>
+                    <KCard icon={DollarSign} title="Receita Líquida" value={loading?'—':fmtCur(kpis?.revenue??0)} color="emerald" loading={loading} sub={kpis?`Bruta: ${fmtCur(kpis.revenueGross)}`:undefined}/>
+                    <KCard icon={Activity}   title="Gasto em Ads"    value={loading?'—':fmtCur(kpis?.spend??0)}   color="blue"    loading={loading}/>
+                    <KCard icon={TrendingUp} title="Lucro"           value={loading?'—':fmtCur(kpis?.profit??0)}  color={isProfit?'emerald':'rose'} loading={loading} sub={kpis?`Margem: ${fmtPct(kpis.profitMargin)}`:undefined}/>
                     <KCard icon={BarChart3}  title="ROI"             value={loading?'—':fmtPct(kpis?.roi??0)}             color={(kpis?.roi??0)>=0?'violet':'amber'} loading={loading} sub={kpis?`ROAS: ${kpis.roas.toFixed(3)}×`:undefined}/>
                   </div>
                 </section>
@@ -570,8 +656,8 @@ export default function UTMifyPage() {
                   <SH icon={ShoppingCart} title="Pedidos"/>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stagger">
                     <KCard icon={ShoppingCart}     title="Aprovados"     value={loading?'—':formatNumber(kpis?.orders??0)}            color="emerald" loading={loading} sub={kpis?`${kpis.ordersTotal} total · ${kpis.ordersPending} pendente`:undefined}/>
-                    <KCard icon={DollarSign}       title="CPA"           value={loading?'—':formatCurrency(kpis?.cpa??0)}             color="cyan"    loading={loading} sub="Custo por aquisição"/>
-                    <KCard icon={Package}          title="Ticket Médio"  value={loading?'—':formatCurrency(kpis?.avgTicket??0)}       color="orange"  loading={loading} sub={kpis?`ARPU: ${formatCurrency(kpis.arpu)}`:undefined}/>
+                    <KCard icon={DollarSign}       title="CPA"           value={loading?'—':fmtCur(kpis?.cpa??0)}             color="cyan"    loading={loading} sub="Custo por aquisição"/>
+                    <KCard icon={Package}          title="Ticket Médio"  value={loading?'—':fmtCur(kpis?.avgTicket??0)}       color="orange"  loading={loading} sub={kpis?`ARPU: ${fmtCur(kpis.arpu)}`:undefined}/>
                     <KCard icon={TrendingDown}     title="Taxa Reembolso" value={loading?'—':fmtPct(kpis?.refundRate??0,false)}       color={(kpis?.refundRate??0)>5?'rose':'slate'} loading={loading} sub={kpis?`${kpis.ordersRefunded} reemb. · ${kpis.ordersChargedback} chargeback`:undefined}/>
                   </div>
                 </section>
@@ -596,13 +682,13 @@ export default function UTMifyPage() {
                       </div>
                       {loading?<div className="space-y-2">{[1,2,3,4].map(i=><div key={i} className="h-7 rounded bg-surface-raised animate-pulse"/>)}</div>:(
                         <div>
-                          <StatRow label="Receita Bruta"      value={formatCurrency(kpis?.revenueGross??0)}/>
-                          <StatRow label="Receita Líquida"    value={formatCurrency(kpis?.revenue??0)} sub="Após deduções"/>
-                          <StatRow label="Pendente"           value={formatCurrency(kpis?.revenuePending??0)}/>
-                          <StatRow label="Estornado (refund)" value={formatCurrency(Math.abs(kpis?.revenueRefunded??0))}/>
-                          <StatRow label="Chargeback"         value={formatCurrency(Math.abs(kpis?.revenueChargeback??0))}/>
-                          {(kpis?.fees??0)>0&&<StatRow label="Fees" value={formatCurrency(kpis?.fees??0)}/>}
-                          {(kpis?.taxes??0)>0&&<StatRow label="Impostos" value={formatCurrency(kpis?.taxes??0)}/>}
+                          <StatRow label="Receita Bruta"      value={fmtCur(kpis?.revenueGross??0)}/>
+                          <StatRow label="Receita Líquida"    value={fmtCur(kpis?.revenue??0)} sub="Após deduções"/>
+                          <StatRow label="Pendente"           value={fmtCur(kpis?.revenuePending??0)}/>
+                          <StatRow label="Estornado (refund)" value={fmtCur(Math.abs(kpis?.revenueRefunded??0))}/>
+                          <StatRow label="Chargeback"         value={fmtCur(Math.abs(kpis?.revenueChargeback??0))}/>
+                          {(kpis?.fees??0)>0&&<StatRow label="Fees" value={fmtCur(kpis?.fees??0)}/>}
+                          {(kpis?.taxes??0)>0&&<StatRow label="Impostos" value={fmtCur(kpis?.taxes??0)}/>}
                         </div>
                       )}
                     </div>
@@ -645,7 +731,7 @@ export default function UTMifyPage() {
                       {loading?<div className="space-y-4">{[1,2,3].map(i=><div key={i} className="h-9 rounded bg-surface-raised animate-pulse"/>)}</div>:totalSpend>0?(
                         <div className="space-y-4">
                           {platforms.filter(p=>p.spend>0).map(p=>(
-                            <PlatBar key={p.key} label={`${p.label} Ads`} spend={p.spend} clicks={p.clicks} pageViews={p.pv} total={totalSpend} color={p.color}/>
+                            <PlatBar key={p.key} label={`${p.label} Ads`} spend={p.spend} clicks={p.clicks} pageViews={p.pv} total={totalSpend} color={p.color} currency={currency}/>
                           ))}
                         </div>
                       ):<p className="text-sm text-slate-600 py-4 text-center">Sem dados de plataforma</p>}
@@ -658,7 +744,7 @@ export default function UTMifyPage() {
                             <div key={p.name} className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-surface-raised/50 border border-surface-border/50">
                               <span className="text-[10px] font-bold text-slate-600 w-4 text-center tabular-nums">{i+1}</span>
                               <div className="flex-1 min-w-0"><p className="text-xs font-medium text-slate-300 truncate">{p.name}</p><p className="text-[10px] text-slate-600 mt-0.5">{formatNumber(p.count)} pedidos</p></div>
-                              <span className="text-xs font-semibold text-emerald-300 tabular-nums shrink-0">{formatCurrency(p.revenue)}</span>
+                              <span className="text-xs font-semibold text-emerald-300 tabular-nums shrink-0">{fmtCur(p.revenue)}</span>
                             </div>
                           ))}
                         </div>
@@ -690,7 +776,7 @@ export default function UTMifyPage() {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.1)" vertical={false}/>
                             <XAxis dataKey="hour" tick={{fontSize:10,fill:'#475569'}} tickFormatter={h=>h%4===0?`${h}h`:''}/>
                             <YAxis tick={{fontSize:10,fill:'#475569'}} tickFormatter={v=>`$${Math.round(v)}`}/>
-                            <Tooltip content={<CTip fmt={v=>formatCurrency(v)}/>}/>
+                            <Tooltip content={<CTip fmt={v=>fmtCur(v)}/>}/>
                             <Bar dataKey="profit" radius={[3,3,0,0]}>{profitHourData.map((e,i)=><Cell key={i} fill={e.profit>=0?'#34d399':'#f87171'}/>)}</Bar>
                           </BarChart>
                         </ResponsiveContainer>
@@ -996,13 +1082,13 @@ export default function UTMifyPage() {
 
                   // ── column helpers ──────────────────────────────────
                   type SK = typeof campSort
-                  const cur = (v: number | null) => v == null ? '—' : formatCurrency(v)
+                  const cur = (v: number | null) => v == null ? '—' : formatCurrency(v, currency)
                   const num = (v: number | null) => v == null ? '—' : formatNumber(v)
                   const pct = (v: number | null, d=1) =>
                     v == null ? '—' : `${v>=0?'+':''}${v.toFixed(d)}%`
                   const budget = (c: UTMifyCampaignRow) => {
                     const b = c.dailyBudget ?? c.lifetimeBudget
-                    return b != null ? formatCurrency(b) : '—'
+                    return b != null ? formatCurrency(b, currency) : '—'
                   }
                   const sortBtn = (key: SK, label: string) => {
                     const on = campSort === key
@@ -1282,7 +1368,7 @@ export default function UTMifyPage() {
           {/* ── Drawer desktop ─────────────────────────────────────────── */}
           {drawerOpen && (
             <div className="hidden lg:flex flex-col w-[420px] shrink-0 border-l border-surface-border bg-surface-card absolute right-0 top-0 bottom-0 z-20 shadow-2xl">
-              <Drawer title={drawerTitle} subtitle={drawerSub} platform={drawerPlatform} kpis={drawerKpis} loading={drawerLoading} error={drawerError} onClose={()=>setDrawerOpen(false)}/>
+              <Drawer title={drawerTitle} subtitle={drawerSub} platform={drawerPlatform} currency={currency} kpis={drawerKpis} loading={drawerLoading} error={drawerError} onClose={()=>setDrawerOpen(false)}/>
             </div>
           )}
 
@@ -1290,7 +1376,7 @@ export default function UTMifyPage() {
           {drawerOpen && (
             <div className="lg:hidden fixed inset-x-0 bottom-0 h-[85vh] bg-surface-card border-t border-surface-border z-50 rounded-t-2xl shadow-2xl flex flex-col">
               <div className="flex justify-center pt-3 pb-1 shrink-0"><div className="w-10 h-1 rounded-full bg-surface-border"/></div>
-              <Drawer title={drawerTitle} subtitle={drawerSub} platform={drawerPlatform} kpis={drawerKpis} loading={drawerLoading} error={drawerError} onClose={()=>setDrawerOpen(false)}/>
+              <Drawer title={drawerTitle} subtitle={drawerSub} platform={drawerPlatform} currency={currency} kpis={drawerKpis} loading={drawerLoading} error={drawerError} onClose={()=>setDrawerOpen(false)}/>
             </div>
           )}
         </div>
