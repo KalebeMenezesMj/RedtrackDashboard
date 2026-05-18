@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   DollarSign, TrendingUp, Activity, ShoppingCart, MousePointerClick,
   RefreshCw, AlertCircle, BarChart3, Package, Zap, Menu,
@@ -297,7 +297,11 @@ export default function UTMifyPage() {
   const [isExporting,    setIsExporting]    = useState(false)
   const [campSort,       setCampSort]       = useState<'spend'|'revenue'|'profit'|'roas'|'clicks'|'impressions'|'approvedOrdersCount'|'roi'|'cpa'|'cpm'|'cpc'|'ctr'|'margin'|'ic'|'cpi'>('spend')
   const [campSortDir,    setCampSortDir]    = useState<'desc'|'asc'>('desc')
-  const [campPlatFilter, setCampPlatFilter] = useState<'both'|'meta'|'google'>('both')
+  const [campPlatFilter,    setCampPlatFilter]    = useState<'both'|'meta'|'google'>('both')
+  // Filtro de status — padrão: apenas ativas (ENABLED/ACTIVE)
+  const [campStatusFilter,  setCampStatusFilter]  = useState<Set<string>>(
+    () => new Set(['ENABLED', 'ACTIVE'])
+  )
 
   // Drawer
   const [drawerOpen,    setDrawerOpen]    = useState(false)
@@ -307,6 +311,12 @@ export default function UTMifyPage() {
   const [drawerKpis,    setDrawerKpis]    = useState<UTMifyKPIData|null>(null)
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [drawerError,   setDrawerError]   = useState<string|null>(null)
+
+  /* ── Statuses únicos da fonte atual ─────────────────────────────────── */
+  const campStatuses = useMemo(() => {
+    const src = campLevel==='campaigns' ? campaigns : campLevel==='adsets' ? adSets : ads
+    return [...new Set(src.map(c => (c.status ?? '').toUpperCase()).filter(Boolean))].sort()
+  }, [campaigns, adSets, ads, campLevel])
 
   /* ── Boot: carrega dashboards + KPIs em uma única requisição ────────── */
   useEffect(() => {
@@ -1008,6 +1018,61 @@ export default function UTMifyPage() {
                         className="h-8 pl-7 pr-3 text-xs rounded-xl bg-surface-raised border border-surface-border text-slate-300 w-36
                                    placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500/50"/>
                     </div>
+                    {/* Filtro de status — checkboxes */}
+                    {campStatuses.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        {campStatuses.map(st => {
+                          const on       = campStatusFilter.has(st)
+                          const isActive = st==='ENABLED' || st==='ACTIVE'
+                          const isPaused = st==='PAUSED'
+                          const checkColor = on
+                            ? isActive ? 'bg-emerald-500 border-emerald-500'
+                            : isPaused ? 'bg-amber-500  border-amber-500'
+                            :            'bg-rose-500   border-rose-500'
+                            : 'bg-transparent border-slate-600 hover:border-slate-400'
+                          const label = st==='ENABLED'||st==='ACTIVE' ? 'Ativa'
+                            : st==='PAUSED'   ? 'Pausada'
+                            : st==='DISABLED' ? 'Desativada'
+                            : st==='DELETED'  ? 'Deletada'
+                            : st
+                          const textColor = on
+                            ? isActive ? 'text-emerald-300'
+                            : isPaused ? 'text-amber-300'
+                            :            'text-rose-300'
+                            : 'text-slate-500'
+                          return (
+                            <label key={st}
+                              className="flex items-center gap-1.5 cursor-pointer select-none group">
+                              <span
+                                onClick={() => setCampStatusFilter(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(st)) next.delete(st)
+                                  else next.add(st)
+                                  return next
+                                })}
+                                className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center transition-all shrink-0 ${checkColor}`}>
+                                {on && (
+                                  <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                                    <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                )}
+                              </span>
+                              <span
+                                onClick={() => setCampStatusFilter(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(st)) next.delete(st)
+                                  else next.add(st)
+                                  return next
+                                })}
+                                className={`text-[11px] font-semibold transition-colors ${textColor} group-hover:text-slate-300`}>
+                                {label}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
                     {campLevel==='campaigns' && (
                       <div className="flex rounded-xl border border-surface-border overflow-hidden">
                         {(['both','meta','google'] as const).map(p=>(
@@ -1101,6 +1166,7 @@ export default function UTMifyPage() {
 
                   const filtered = source
                     .filter(c => campLevel!=='campaigns' || campPlatFilter==='both' || c.platform===campPlatFilter)
+                    .filter(c => campStatusFilter.size===0 || campStatusFilter.has((c.status??'').toUpperCase()))
                     .filter(c => !campSearch || c.name.toLowerCase().includes(campSearch.toLowerCase()))
                     .sort((a,b) => {
                       const inf = campSortDir==='desc' ? -Infinity : Infinity
