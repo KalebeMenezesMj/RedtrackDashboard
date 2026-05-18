@@ -3,16 +3,19 @@
 import { useState, useMemo } from 'react'
 import {
   ArrowUpDown, ArrowUp, ArrowDown, Search,
-  ChevronRight, Inbox, X,
+  ChevronRight, Inbox, X, Download, Loader2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { formatCurrency, formatPercent, formatNumber, profitColor } from '@/lib/format'
+import { exportRedTrackCampaigns } from '@/lib/exportRedTrackExcel'
 import type { CampaignRow, SortField, SortDir } from '@/lib/types'
 
 interface Props {
   campaigns: CampaignRow[]
   loading:   boolean
   onSelect?: (campaign: CampaignRow) => void
+  dateFrom?: string
+  dateTo?:   string
 }
 
 interface Column {
@@ -149,11 +152,12 @@ function SkeletonRows() {
 }
 
 /* ── Table ────────────────────────────────────────────────────────────────── */
-export default function CampaignTable({ campaigns, loading, onSelect }: Props) {
-  const [sortField, setSortField] = useState<SortField>('revenue')
-  const [sortDir,   setSortDir]   = useState<SortDir>('desc')
-  const [search,    setSearch]    = useState('')
-  const [page,      setPage]      = useState(1)
+export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, dateTo }: Props) {
+  const [sortField,   setSortField]   = useState<SortField>('revenue')
+  const [sortDir,     setSortDir]     = useState<SortDir>('desc')
+  const [search,      setSearch]      = useState('')
+  const [page,        setPage]        = useState(1)
+  const [isExporting, setIsExporting] = useState(false)
   const PAGE_SIZE = 10
 
   const handleSort = (field: SortField) => {
@@ -216,6 +220,23 @@ export default function CampaignTable({ campaigns, loading, onSelect }: Props) {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               {filtered.length} {filtered.length === 1 ? 'campanha' : 'campanhas'}
             </span>
+            {dateFrom && dateTo && sorted.length > 0 && (
+              <button
+                title="Exportar para Excel (.xlsx)"
+                disabled={isExporting}
+                onClick={async () => {
+                  setIsExporting(true)
+                  try { exportRedTrackCampaigns(sorted, dateFrom, dateTo) }
+                  finally { setIsExporting(false) }
+                }}
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-[11px] font-semibold transition-all
+                  border border-emerald-500/30 bg-emerald-500/10 text-emerald-400
+                  hover:bg-emerald-500/20 hover:border-emerald-500/50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isExporting ? <Loader2 size={12} className="animate-spin"/> : <Download size={12}/>}
+                <span>Excel</span>
+              </button>
+            )}
           </div>
         )}
       </div>

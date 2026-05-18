@@ -458,7 +458,13 @@ export default function CampanhasPage() {
                       Clique em uma campanha para ver o detalhamento completo
                     </p>
                   )}
-                  <CampaignTable campaigns={campaigns} loading={loading} onSelect={setSelectedCampaign} />
+                  <CampaignTable
+                    campaigns={campaigns}
+                    loading={loading}
+                    onSelect={setSelectedCampaign}
+                    dateFrom={dateRange.from}
+                    dateTo={dateRange.to}
+                  />
                 </div>
               </section>
 

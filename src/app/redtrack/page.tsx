@@ -5,6 +5,7 @@ import {
   DollarSign, TrendingUp, Activity, MousePointerClick,
   RefreshCw, AlertCircle, BarChart3, ShoppingCart, CreditCard,
   Layers, Menu, LineChart as LineIcon, Repeat2, Target,
+  Download, Loader2, X, ChevronRight, Megaphone,
 } from 'lucide-react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
@@ -14,7 +15,8 @@ import Sidebar         from '@/components/Sidebar'
 import DateRangePicker from '@/components/DateRangePicker'
 import StatusBadge     from '@/components/StatusBadge'
 import { formatCurrency, formatNumber, formatROI, roiBgColor } from '@/lib/format'
-import type { DateRange, KPIData, ChartDataPoint, CampaignRow } from '@/lib/types'
+import { exportRedTrackCampaigns, exportRedTrackAds }           from '@/lib/exportRedTrackExcel'
+import type { DateRange, KPIData, ChartDataPoint, CampaignRow, AdRow } from '@/lib/types'
 
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 function localDate(d = new Date()) {
@@ -128,6 +130,14 @@ export default function RedTrackPage() {
   const [apiStatus,    setApiStatus]    = useState<'connected'|'error'|'loading'>('loading')
   const [lastUpdate,   setLastUpdate]   = useState('')
 
+  // Painel de anúncios de uma campanha
+  const [selCampaign,    setSelCampaign]    = useState<CampaignRow | null>(null)
+  const [ads,            setAds]            = useState<AdRow[]>([])
+  const [adsLoading,     setAdsLoading]     = useState(false)
+  const [adsError,       setAdsError]       = useState<string | null>(null)
+  const [isExportingCamp, setIsExportingCamp] = useState(false)
+  const [isExportingAds,  setIsExportingAds]  = useState(false)
+
   const fetchData = useCallback(async (range: DateRange) => {
     setLoading(true); setError(null); setChartError(null); setApiStatus('loading')
     try {
@@ -159,6 +169,20 @@ export default function RedTrackPage() {
     } catch (e: unknown) {
       setChartError(e instanceof Error ? e.message : 'Erro desconhecido')
     } finally { setChartLoading(false) }
+  }, [])
+
+  const fetchAds = useCallback(async (campaign: CampaignRow, range: DateRange) => {
+    setSelCampaign(campaign); setAds([]); setAdsError(null); setAdsLoading(true)
+    try {
+      const p   = new URLSearchParams({ from: range.from, to: range.to, ads: '1' })
+      const res = await fetch(`/api/campaign/${encodeURIComponent(campaign.id)}?${p}`)
+      const j   = await res.json()
+      if (!j.ok) throw new Error(j.error ?? 'Falha')
+      setAds(j.ads ?? [])
+      if (j.adsError) setAdsError(j.adsError)
+    } catch (e: unknown) {
+      setAdsError(e instanceof Error ? e.message : 'Erro ao carregar anúncios')
+    } finally { setAdsLoading(false) }
   }, [])
 
   useEffect(() => { fetchData(dateRange) }, [fetchData, dateRange])
@@ -416,49 +440,76 @@ export default function RedTrackPage() {
             </div>
           </section>
 
-          {/* ── 5. Top Campanhas ─────────────────────────────────────────────── */}
+          {/* ── 5. Campanhas ─────────────────────────────────────────────── */}
           <section>
-            <SectionHeading icon={Layers} title="Top Campanhas"
-              badge={!loading && campaigns.length > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-surface-raised border border-surface-muted px-2 py-0.5 rounded-md tabular-nums">
-                  {campaigns.length} campanhas
-                </span>
-              ) : undefined}
+            <SectionHeading icon={Layers} title="Campanhas"
+              badge={
+                <div className="flex items-center gap-2">
+                  {!loading && campaigns.length > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-surface-raised border border-surface-muted px-2 py-0.5 rounded-md tabular-nums">
+                      {campaigns.length} campanhas
+                    </span>
+                  )}
+                  {/* Exportar campanhas */}
+                  {!loading && campaigns.length > 0 && (
+                    <button
+                      title="Exportar campanhas para Excel"
+                      disabled={isExportingCamp}
+                      onClick={async () => {
+                        setIsExportingCamp(true)
+                        try { exportRedTrackCampaigns(campaigns, dateRange.from, dateRange.to) }
+                        finally { setIsExportingCamp(false) }
+                      }}
+                      className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-semibold transition-all
+                        border border-emerald-500/30 bg-emerald-500/10 text-emerald-400
+                        hover:bg-emerald-500/20 hover:border-emerald-500/50 disabled:opacity-40">
+                      {isExportingCamp ? <Loader2 size={11} className="animate-spin"/> : <Download size={11}/>}
+                      Excel
+                    </button>
+                  )}
+                </div>
+              }
             />
             <div className="card overflow-hidden">
               {loading ? (
                 <div className="p-5 space-y-2">{[1,2,3,4,5].map(i=><div key={i} className="h-10 rounded bg-surface-raised animate-pulse"/>)}</div>
-              ) : topCampaigns.length > 0 ? (
+              ) : campaigns.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px]">
                     <thead>
                       <tr className="border-b border-surface-border/60">
-                        {['Campanha', 'Gasto', 'Receita', 'Lucro', 'ROI', 'CPA', 'Cliques', 'Compras'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-600 first:pl-5">
+                        {['Campanha', 'Cliques', 'Conv.', 'Compras', 'Gasto', 'Receita', 'Lucro', 'ROI', 'CPA', ''].map((h, i) => (
+                          <th key={i} className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-600 first:pl-5">
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {topCampaigns.map(c => (
-                        <tr key={c.id} className="border-b border-surface-border/30 hover:bg-surface-hover/50 transition-colors">
-                          <td className="px-4 pl-5 py-3">
-                            <p className="text-xs font-medium text-slate-300 truncate max-w-[200px]" title={c.name}>{c.name}</p>
+                      {campaigns.map(c => (
+                        <tr key={c.id}
+                          onClick={() => fetchAds(c, dateRange)}
+                          className="border-b border-surface-border/30 hover:bg-surface-hover/50 transition-colors cursor-pointer group">
+                          <td className="px-3 pl-5 py-2.5">
+                            <p className="text-xs font-medium text-slate-300 group-hover:text-white transition-colors truncate max-w-[220px]" title={c.name}>{c.name}</p>
                           </td>
-                          <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">{formatCurrency(c.cost)}</td>
-                          <td className="px-4 py-3 text-xs text-slate-300 tabular-nums">{formatCurrency(c.revenue)}</td>
-                          <td className="px-4 py-3 text-xs tabular-nums font-semibold" style={{ color: c.profit >= 0 ? '#34d399' : '#f87171' }}>
+                          <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatNumber(c.clicks)}</td>
+                          <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatNumber(c.conversions)}</td>
+                          <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatNumber(c.purchases)}</td>
+                          <td className="px-3 py-2.5 text-xs text-blue-300 tabular-nums font-semibold">{formatCurrency(c.cost)}</td>
+                          <td className="px-3 py-2.5 text-xs text-emerald-300 tabular-nums font-semibold">{formatCurrency(c.revenue)}</td>
+                          <td className="px-3 py-2.5 text-xs tabular-nums font-semibold" style={{ color: c.profit >= 0 ? '#34d399' : '#f87171' }}>
                             {formatCurrency(c.profit)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2.5">
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${roiBgColor(c.roi)}`}>
                               {formatROI(c.roi)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">{formatCurrency(c.cpa)}</td>
-                          <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">{formatNumber(c.clicks)}</td>
-                          <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">{formatNumber(c.purchases)}</td>
+                          <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatCurrency(c.cpa)}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right">
+                            <ChevronRight size={13} className="text-slate-700 group-hover:text-slate-400 transition-colors inline"/>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -471,6 +522,114 @@ export default function RedTrackPage() {
               )}
             </div>
           </section>
+
+          {/* ── 6. Painel de Anúncios ────────────────────────────────────────── */}
+          {selCampaign && (
+            <section>
+              <div className="card overflow-hidden border border-blue-500/20">
+
+                {/* Cabeçalho do painel */}
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b border-surface-border/60 bg-blue-500/5">
+                  <div className="w-6 h-6 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0">
+                    <Megaphone size={12} className="text-blue-400" strokeWidth={2.5}/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">Anúncios</p>
+                    <p className="text-xs font-medium text-slate-300 truncate" title={selCampaign.name}>{selCampaign.name}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Exportar anúncios */}
+                    {!adsLoading && ads.length > 0 && (
+                      <button
+                        title="Exportar anúncios para Excel"
+                        disabled={isExportingAds}
+                        onClick={async () => {
+                          setIsExportingAds(true)
+                          try { exportRedTrackAds(ads, selCampaign.name, dateRange.from, dateRange.to) }
+                          finally { setIsExportingAds(false) }
+                        }}
+                        className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-semibold transition-all
+                          border border-emerald-500/30 bg-emerald-500/10 text-emerald-400
+                          hover:bg-emerald-500/20 hover:border-emerald-500/50 disabled:opacity-40">
+                        {isExportingAds ? <Loader2 size={11} className="animate-spin"/> : <Download size={11}/>}
+                        Excel
+                      </button>
+                    )}
+                    {/* Recarregar */}
+                    <button onClick={() => fetchAds(selCampaign, dateRange)} disabled={adsLoading}
+                      className="btn-icon !w-7 !h-7" title="Recarregar anúncios">
+                      <RefreshCw size={11} className={adsLoading ? 'animate-spin' : ''}/>
+                    </button>
+                    {/* Fechar */}
+                    <button onClick={() => { setSelCampaign(null); setAds([]) }}
+                      className="btn-icon !w-7 !h-7" title="Fechar">
+                      <X size={13}/>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Conteúdo */}
+                {adsLoading ? (
+                  <div className="p-5 space-y-2">{[1,2,3,4].map(i=>(
+                    <div key={i} className="h-9 rounded-lg bg-surface-raised animate-pulse"/>
+                  ))}</div>
+                ) : adsError ? (
+                  <div className="flex items-start gap-3 m-4 p-3.5 rounded-xl border border-rose-500/25 bg-rose-500/8">
+                    <AlertCircle size={14} className="text-rose-400 shrink-0 mt-0.5"/>
+                    <div>
+                      <p className="text-xs font-semibold text-rose-300">Erro ao carregar anúncios</p>
+                      <p className="text-[11px] text-rose-400/70 mt-0.5">{adsError}</p>
+                    </div>
+                  </div>
+                ) : ads.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-sm text-slate-600">Nenhum anúncio encontrado para esta campanha no período</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px]">
+                      <thead>
+                        <tr className="border-b border-surface-border/60 bg-surface-raised/30">
+                          {['#', 'Anúncio', 'Cliques', 'Impr.', 'CTR%', 'CR%', 'Gasto', 'Receita', 'Lucro', 'ROI', 'CPA', 'Compras', 'Ck%'].map((h, i) => (
+                            <th key={i} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600 first:pl-5">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ads.map((ad, i) => (
+                          <tr key={ad.id} className={`border-b border-surface-border/20 ${i%2===1?'bg-surface-raised/20':''}`}>
+                            <td className="px-3 pl-5 py-2 text-[10px] text-slate-700 tabular-nums">{i+1}</td>
+                            <td className="px-3 py-2 max-w-[240px]">
+                              <p className="text-[11px] font-medium text-slate-300 truncate" title={ad.name}>{ad.name}</p>
+                            </td>
+                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{formatNumber(ad.clicks)}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-500 tabular-nums">{formatNumber(ad.impressions)}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{ad.ctr.toFixed(2)}%</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{ad.cr.toFixed(2)}%</td>
+                            <td className="px-3 py-2 text-[11px] text-blue-300 tabular-nums font-semibold">{formatCurrency(ad.cost)}</td>
+                            <td className="px-3 py-2 text-[11px] text-emerald-300 tabular-nums font-semibold">{formatCurrency(ad.revenue)}</td>
+                            <td className="px-3 py-2 text-[11px] tabular-nums font-semibold" style={{ color: ad.profit >= 0 ? '#34d399' : '#f87171' }}>
+                              {formatCurrency(ad.profit)}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${roiBgColor(ad.roi)}`}>
+                                {formatROI(ad.roi)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{formatCurrency(ad.cpa)}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{formatNumber(ad.purchases)}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-500 tabular-nums">{ad.checkoutRate.toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* Footer */}
           <footer className="text-center py-8 border-t border-surface-border/30">

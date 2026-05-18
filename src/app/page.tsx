@@ -469,6 +469,8 @@ export default function DashboardPage() {
                   campaigns={campaigns}
                   loading={loading}
                   onSelect={setSelectedCampaign}
+                  dateFrom={dateRange.from}
+                  dateTo={dateRange.to}
                 />
               </div>
             </div>

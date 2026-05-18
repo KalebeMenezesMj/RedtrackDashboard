@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   X, TrendingUp, TrendingDown, DollarSign, Activity, MousePointerClick,
   RefreshCw, ShoppingCart, CreditCard, AlertCircle, Sparkles, Megaphone,
-  Image as ImageIcon, ArrowUpDown, ChevronUp, ChevronDown,
+  Image as ImageIcon, ArrowUpDown, ChevronUp, ChevronDown, Download, Loader2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ROILineChart      from './ROILineChart'
 import SpendRevenueChart from './SpendRevenueChart'
 import InfoTooltip       from './InfoTooltip'
 import { formatCurrency, formatROI, formatNumber } from '@/lib/format'
+import { exportRedTrackAds } from '@/lib/exportRedTrackExcel'
 import type { CampaignRow, ChartDataPoint, DateRange, AdRow } from '@/lib/types'
 
 interface Props {
@@ -22,12 +23,13 @@ interface Props {
 type AdSortField = 'cost' | 'revenue' | 'profit' | 'roi' | 'clicks' | 'purchases' | 'purchaseRate' | 'checkoutRate'
 
 export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) {
-  const [chartData,   setChartData]   = useState<ChartDataPoint[]>([])
-  const [ads,         setAds]         = useState<AdRow[] | null>(null)
-  const [loading,     setLoading]     = useState(false)
-  const [adsError,    setAdsError]    = useState<string | null>(null)
-  const [error,       setError]       = useState<string | null>(null)
-  const [adSort,      setAdSort]      = useState<{ field: AdSortField; dir: 'asc' | 'desc' }>({ field: 'cost', dir: 'desc' })
+  const [chartData,    setChartData]    = useState<ChartDataPoint[]>([])
+  const [ads,          setAds]          = useState<AdRow[] | null>(null)
+  const [loading,      setLoading]      = useState(false)
+  const [adsError,     setAdsError]     = useState<string | null>(null)
+  const [error,        setError]        = useState<string | null>(null)
+  const [adSort,       setAdSort]       = useState<{ field: AdSortField; dir: 'asc' | 'desc' }>({ field: 'cost', dir: 'desc' })
+  const [isExporting,  setIsExporting]  = useState(false)
 
   // Carga única — gráficos + anúncios na mesma chamada (?ads=1)
   const fetchData = useCallback(async (id: string, range: DateRange) => {
@@ -277,9 +279,27 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
               title="Anúncios"
               badge={
                 ads !== null && ads.length > 0 ? (
-                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 tabular-nums">
-                    {ads.length} ads
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 tabular-nums">
+                      {ads.length} ads
+                    </span>
+                    <button
+                      title="Exportar anúncios para Excel (.xlsx)"
+                      disabled={isExporting}
+                      onClick={async () => {
+                        if (!campaign) return
+                        setIsExporting(true)
+                        try { exportRedTrackAds(sortedAds, campaign.name, dateRange.from, dateRange.to) }
+                        finally { setIsExporting(false) }
+                      }}
+                      className="flex items-center gap-1 h-6 px-2 rounded-lg text-[10px] font-semibold transition-all
+                        border border-emerald-500/30 bg-emerald-500/10 text-emerald-400
+                        hover:bg-emerald-500/20 hover:border-emerald-500/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isExporting ? <Loader2 size={10} className="animate-spin"/> : <Download size={10}/>}
+                      Excel
+                    </button>
+                  </div>
                 ) : null
               }
             />
