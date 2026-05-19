@@ -305,7 +305,7 @@ export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, 
                     onClick={e => e.stopPropagation()}
                     className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group/rz flex items-center justify-center"
                   >
-                    <div className="h-4 w-px bg-surface-border group-hover/rz:bg-brand-500/60 transition-colors" />
+                    <div className="h-4 w-0.5 rounded-full bg-slate-600/50 group-hover/rz:bg-brand-400 group-hover/rz:w-1 transition-all" />
                   </div>
                 </th>
               ))}

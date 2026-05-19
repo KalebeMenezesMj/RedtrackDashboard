@@ -345,6 +345,16 @@ export default function UTMifyPage() {
     return [...new Set(src.map(c => (c.status ?? '').toUpperCase()).filter(Boolean))].sort()
   }, [campaigns, adSets, ads, campLevel])
 
+  /* ── Contagem filtrada (respeita status, plataforma e busca) ─────────── */
+  const filteredCampCount = useMemo(() => {
+    const src = campLevel==='campaigns' ? campaigns : campLevel==='adsets' ? adSets : ads
+    return src
+      .filter(c => campLevel!=='campaigns' || campPlatFilter==='both' || c.platform===campPlatFilter)
+      .filter(c => campStatusFilter.size===0 || campStatusFilter.has((c.status??'').toUpperCase()))
+      .filter(c => !campSearch || c.name.toLowerCase().includes(campSearch.toLowerCase()))
+      .length
+  }, [campaigns, adSets, ads, campLevel, campPlatFilter, campStatusFilter, campSearch])
+
   /* ── Boot: carrega dashboards + KPIs em uma única requisição ────────── */
   useEffect(() => {
     async function boot() {
@@ -999,8 +1009,8 @@ export default function UTMifyPage() {
                     className={`flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-semibold transition-all
                       ${campLevel==='campaigns'?'bg-violet-600/25 text-violet-300 border border-violet-500/30':'text-slate-500 hover:text-slate-300 hover:bg-surface-hover'}`}>
                     <Activity size={11}/> Campanhas
-                    {campLevel==='campaigns'&&campaigns.length>0&&(
-                      <span className="ml-1 text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded-md font-bold">{campaigns.length}</span>
+                    {campLevel==='campaigns'&&filteredCampCount>0&&(
+                      <span className="ml-1 text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded-md font-bold">{filteredCampCount}</span>
                     )}
                   </button>
 
@@ -1012,8 +1022,8 @@ export default function UTMifyPage() {
                           ${campLevel==='adsets'?'bg-blue-600/25 text-blue-300 border border-blue-500/30':'text-slate-500 hover:text-slate-300 hover:bg-surface-hover'}`}>
                         <Layers size={11} className="shrink-0"/>
                         <span className="truncate">{selCampaign.name}</span>
-                        {campLevel==='adsets'&&adSets.length>0&&(
-                          <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-md font-bold shrink-0">{adSets.length}</span>
+                        {campLevel==='adsets'&&filteredCampCount>0&&(
+                          <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-md font-bold shrink-0">{filteredCampCount}</span>
                         )}
                       </button>
                     </>
@@ -1027,8 +1037,8 @@ export default function UTMifyPage() {
                           ${campLevel==='ads'?'bg-emerald-600/25 text-emerald-300 border border-emerald-500/30':'text-slate-500 hover:text-slate-300 hover:bg-surface-hover'}`}>
                         <Tag size={11} className="shrink-0"/>
                         <span className="truncate">{selAdSet.name}</span>
-                        {campLevel==='ads'&&ads.length>0&&(
-                          <span className="ml-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md font-bold shrink-0">{ads.length}</span>
+                        {campLevel==='ads'&&filteredCampCount>0&&(
+                          <span className="ml-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md font-bold shrink-0">{filteredCampCount}</span>
                         )}
                       </button>
                     </>
@@ -1215,6 +1225,18 @@ export default function UTMifyPage() {
 
                   // ── column helpers ──────────────────────────────────
                   type SK = typeof campSort
+                  type UK = keyof typeof utmW
+                  // Handle de resize: posicionado absoluto na borda direita de cada célula
+                  const rz = (key: UK) => (
+                    <div
+                      onMouseDown={e => startUtmResize(e, key)}
+                      onClick={e => e.stopPropagation()}
+                      className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10
+                                 flex items-center justify-center group/rh select-none"
+                    >
+                      <div className="w-0.5 h-3/4 rounded-full bg-slate-600/40 group-hover/rh:bg-violet-400 transition-colors" />
+                    </div>
+                  )
                   const cur = (v: number | null) => v == null ? '—' : formatCurrency(v, currency)
                   const num = (v: number | null) => v == null ? '—' : formatNumber(v)
                   const pct = (v: number | null, d=1) =>
@@ -1248,7 +1270,7 @@ export default function UTMifyPage() {
                   const hasChevron = isClickable
                   const GT = [
                     `${utmW.icon}px`,                          // status icon
-                    `minmax(60px,${utmW.name}px)`,             // name (flexible)
+                    `${utmW.name}px`,                          // name
                     `${utmW.budget}px`,                        // orçamento
                     ...(hasUpdate?[`${utmW.updatedAt}px`]:[]), // ult.atualização (adsets only)
                     `${utmW.vendas}px`,                        // vendas
@@ -1270,58 +1292,46 @@ export default function UTMifyPage() {
                   ].join(' ')
 
                   return (
-                    <div className="space-y-1">
+                    <div className="space-y-1 overflow-x-auto pb-1">
                       {/* ── Header + Rows num único container ──────────── */}
-                      <div>
-                        {/* Header com handles de resize */}
-                        {(() => {
-                          type UK = keyof typeof utmW
-                          // Handle de resize: posicionado absoluto na borda direita da célula
-                          const rz = (key: UK) => (
-                            <div
-                              onMouseDown={e => startUtmResize(e, key)}
-                              onClick={e => e.stopPropagation()}
-                              className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 flex items-center justify-center group/rz select-none"
-                            >
-                              <div className="h-3 w-px bg-surface-border group-hover/rz:bg-violet-500/60 transition-colors" />
+                      <div style={{minWidth: 'max-content'}}>
+
+                        {/* ── Header com handles inline ───────────────────── */}
+                        <div style={{gridTemplateColumns:GT}}
+                             className="hidden lg:grid gap-x-1 px-2 pb-1.5
+                                        text-[8.5px] font-semibold uppercase tracking-[0.07em]">
+                          <span/>{/* status — não redimensionável */}
+                          <div className="relative min-w-0">
+                            <span className="text-slate-600 capitalize block truncate">{levelLabel}</span>
+                            {rz('name')}
+                          </div>
+                          <div className="relative">
+                            <span className="text-slate-600 text-right block pr-2">Orç.</span>
+                            {rz('budget')}
+                          </div>
+                          {hasUpdate && (
+                            <div className="relative">
+                              <span className="text-slate-600 text-right block pr-2">Atual.</span>
+                              {rz('updatedAt')}
                             </div>
-                          )
-                          return (
-                            <div style={{gridTemplateColumns:GT}}
-                                 className="hidden lg:grid gap-x-1 px-2 pb-1.5
-                                            text-[8.5px] font-semibold uppercase tracking-[0.07em]">
-                              <span/>{/* status icon — não redimensionável */}
-                              <div className="relative">{/* name */}
-                                <span className="text-slate-600 capitalize">{levelLabel}</span>
-                                {rz('name')}
-                              </div>
-                              <div className="relative flex justify-end">
-                                <span className="text-slate-600">Orç.</span>{rz('budget')}
-                              </div>
-                              {hasUpdate && (
-                                <div className="relative flex justify-end">
-                                  <span className="text-slate-600">Atual.</span>{rz('updatedAt')}
-                                </div>
-                              )}
-                              <div className="relative">{sortBtn('approvedOrdersCount','Vnd.')}{rz('vendas')}</div>
-                              <div className="relative">{sortBtn('cpa','CPA')}{rz('cpa')}</div>
-                              <div className="relative">{sortBtn('spend','Gasto')}{rz('spend')}</div>
-                              <div className="relative">{sortBtn('revenue','Fat.')}{rz('revenue')}</div>
-                              <div className="relative">{sortBtn('profit','Lucro')}{rz('profit')}</div>
-                              <div className="relative">{sortBtn('roas','ROAS')}{rz('roas')}</div>
-                              <div className="relative">{sortBtn('margin','Mgm.')}{rz('margin')}</div>
-                              <div className="relative">{sortBtn('roi','ROI')}{rz('roi')}</div>
-                              <div className="relative">{sortBtn('ic','IC')}{rz('ic')}</div>
-                              <div className="relative">{sortBtn('cpi','CPI')}{rz('cpi')}</div>
-                              <div className="relative">{sortBtn('cpc','CPC')}{rz('cpc')}</div>
-                              <div className="relative">{sortBtn('ctr','CTR')}{rz('ctr')}</div>
-                              <div className="relative">{sortBtn('cpm','CPM')}{rz('cpm')}</div>
-                              <div className="relative">{sortBtn('impressions','Impr.')}{rz('impressions')}</div>
-                              <div className="relative">{sortBtn('clicks','Clic.')}{rz('clicks')}</div>
-                              {hasChevron&&<span/>}
-                            </div>
-                          )
-                        })()}
+                          )}
+                          <div className="relative overflow-hidden">{sortBtn('approvedOrdersCount','Vnd.')}{rz('vendas')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('cpa','CPA')}{rz('cpa')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('spend','Gasto')}{rz('spend')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('revenue','Fat.')}{rz('revenue')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('profit','Lucro')}{rz('profit')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('roas','ROAS')}{rz('roas')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('margin','Mgm.')}{rz('margin')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('roi','ROI')}{rz('roi')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('ic','IC')}{rz('ic')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('cpi','CPI')}{rz('cpi')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('cpc','CPC')}{rz('cpc')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('ctr','CTR')}{rz('ctr')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('cpm','CPM')}{rz('cpm')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('impressions','Impr.')}{rz('impressions')}</div>
+                          <div className="relative overflow-hidden">{sortBtn('clicks','Clic.')}{rz('clicks')}</div>
+                          {hasChevron && <span/>}
+                        </div>
 
                         {/* Rows */}
                         <div className="space-y-1">
