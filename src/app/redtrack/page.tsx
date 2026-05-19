@@ -18,6 +18,9 @@ import { formatCurrency, formatNumber, formatROI, roiBgColor } from '@/lib/forma
 import { exportRedTrackCampaigns, exportRedTrackAds }           from '@/lib/exportRedTrackExcel'
 import type { DateRange, KPIData, ChartDataPoint, CampaignRow, AdRow } from '@/lib/types'
 
+/* RedTrack envia valores em USD */
+const fmtUSD = (v: number) => formatCurrency(v, 'USD')
+
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 function localDate(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -91,7 +94,7 @@ function ChartTip({ active, payload, label }: {
       <p className="text-slate-400 font-medium mb-1">{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color }} className="font-semibold tabular-nums">
-          {p.name}: {formatCurrency(p.value)}
+          {p.name}: {fmtUSD(p.value)}
         </p>
       ))}
     </div>
@@ -109,7 +112,7 @@ function ROITip({ active, payload, label }: {
       <p className="text-slate-400 font-medium mb-1">{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color }} className="font-semibold tabular-nums">
-          {p.name === 'ROI' ? `ROI: ${p.value.toFixed(2)}%` : `Lucro: ${formatCurrency(p.value)}`}
+          {p.name === 'ROI' ? `ROI: ${p.value.toFixed(2)}%` : `Lucro: ${fmtUSD(p.value)}`}
         </p>
       ))}
     </div>
@@ -272,15 +275,15 @@ export default function RedTrackPage() {
             <SectionHeading icon={DollarSign} title="Financeiro" />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stagger">
               <KCard icon={DollarSign} title="Gasto Total"
-                value={loading ? '—' : formatCurrency(kpis?.totalSpend ?? 0)}
+                value={loading ? '—' : fmtUSD(kpis?.totalSpend ?? 0)}
                 color="blue" loading={loading}
               />
               <KCard icon={TrendingUp} title="Receita"
-                value={loading ? '—' : formatCurrency(kpis?.totalRevenue ?? 0)}
+                value={loading ? '—' : fmtUSD(kpis?.totalRevenue ?? 0)}
                 color="emerald" loading={loading}
               />
               <KCard icon={Activity} title="Lucro"
-                value={loading ? '—' : formatCurrency(profit)}
+                value={loading ? '—' : fmtUSD(profit)}
                 color={isProfit ? 'emerald' : 'rose'} loading={loading}
                 sub={isProfit ? '▲ Lucrativo' : '▼ Prejuízo'}
               />
@@ -496,17 +499,17 @@ export default function RedTrackPage() {
                           <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatNumber(c.clicks)}</td>
                           <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatNumber(c.conversions)}</td>
                           <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatNumber(c.purchases)}</td>
-                          <td className="px-3 py-2.5 text-xs text-blue-300 tabular-nums font-semibold">{formatCurrency(c.cost)}</td>
-                          <td className="px-3 py-2.5 text-xs text-emerald-300 tabular-nums font-semibold">{formatCurrency(c.revenue)}</td>
+                          <td className="px-3 py-2.5 text-xs text-blue-300 tabular-nums font-semibold">{fmtUSD(c.cost)}</td>
+                          <td className="px-3 py-2.5 text-xs text-emerald-300 tabular-nums font-semibold">{fmtUSD(c.revenue)}</td>
                           <td className="px-3 py-2.5 text-xs tabular-nums font-semibold" style={{ color: c.profit >= 0 ? '#34d399' : '#f87171' }}>
-                            {formatCurrency(c.profit)}
+                            {fmtUSD(c.profit)}
                           </td>
                           <td className="px-3 py-2.5">
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${roiBgColor(c.roi)}`}>
                               {formatROI(c.roi)}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{formatCurrency(c.cpa)}</td>
+                          <td className="px-3 py-2.5 text-xs text-slate-400 tabular-nums">{fmtUSD(c.cpa)}</td>
                           <td className="px-3 pr-4 py-2.5 text-right">
                             <ChevronRight size={13} className="text-slate-700 group-hover:text-slate-400 transition-colors inline"/>
                           </td>
@@ -608,17 +611,17 @@ export default function RedTrackPage() {
                             <td className="px-3 py-2 text-[11px] text-slate-500 tabular-nums">{formatNumber(ad.impressions)}</td>
                             <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{ad.ctr.toFixed(2)}%</td>
                             <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{ad.cr.toFixed(2)}%</td>
-                            <td className="px-3 py-2 text-[11px] text-blue-300 tabular-nums font-semibold">{formatCurrency(ad.cost)}</td>
-                            <td className="px-3 py-2 text-[11px] text-emerald-300 tabular-nums font-semibold">{formatCurrency(ad.revenue)}</td>
+                            <td className="px-3 py-2 text-[11px] text-blue-300 tabular-nums font-semibold">{fmtUSD(ad.cost)}</td>
+                            <td className="px-3 py-2 text-[11px] text-emerald-300 tabular-nums font-semibold">{fmtUSD(ad.revenue)}</td>
                             <td className="px-3 py-2 text-[11px] tabular-nums font-semibold" style={{ color: ad.profit >= 0 ? '#34d399' : '#f87171' }}>
-                              {formatCurrency(ad.profit)}
+                              {fmtUSD(ad.profit)}
                             </td>
                             <td className="px-3 py-2">
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${roiBgColor(ad.roi)}`}>
                                 {formatROI(ad.roi)}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{formatCurrency(ad.cpa)}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{fmtUSD(ad.cpa)}</td>
                             <td className="px-3 py-2 text-[11px] text-slate-400 tabular-nums">{formatNumber(ad.purchases)}</td>
                             <td className="px-3 py-2 text-[11px] text-slate-500 tabular-nums">{ad.checkoutRate.toFixed(1)}%</td>
                           </tr>

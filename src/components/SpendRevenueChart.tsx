@@ -9,8 +9,9 @@ import { formatCurrency } from '@/lib/format'
 import type { ChartDataPoint } from '@/lib/types'
 
 interface Props {
-  data:    ChartDataPoint[]
-  loading: boolean
+  data:     ChartDataPoint[]
+  loading:  boolean
+  currency?: string
 }
 
 function formatDate(d: string) {
@@ -25,28 +26,34 @@ function formatYAxis(v: number) {
 }
 
 type TooltipPayloadItem = { dataKey: string; value: number }
-const CustomTooltip = ({
-  active, payload, label,
-}: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string }) => {
-  if (!active || !payload?.length) return null
-  const spend   = Number(payload.find(p => p.dataKey === 'spend')?.value   ?? 0)
-  const revenue = Number(payload.find(p => p.dataKey === 'revenue')?.value ?? 0)
-  const profit  = revenue - spend
-  return (
-    <TooltipShell title={formatDate(label as string)}>
-      <TooltipRow color="#60a5fa" label="Gasto"    value={formatCurrency(spend)} />
-      <TooltipRow color="#34d399" label="Receita"  value={formatCurrency(revenue)} emphasis="positive" />
-      <TooltipRow
-        divider
-        label={profit >= 0 ? '▲ Lucro' : '▼ Prejuízo'}
-        value={formatCurrency(profit)}
-        emphasis={profit >= 0 ? 'positive' : 'negative'}
-      />
-    </TooltipShell>
-  )
+function makeTooltip(currency: string) {
+  return function CustomTooltip({
+    active, payload, label,
+  }: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string }) {
+    if (!active || !payload?.length) return null
+    const spend   = Number(payload.find(p => p.dataKey === 'spend')?.value   ?? 0)
+    const revenue = Number(payload.find(p => p.dataKey === 'revenue')?.value ?? 0)
+    const profit  = revenue - spend
+    const fmt = (v: number) => formatCurrency(v, currency)
+    return (
+      <TooltipShell title={formatDate(label as string)}>
+        <TooltipRow color="#60a5fa" label="Gasto"    value={fmt(spend)} />
+        <TooltipRow color="#34d399" label="Receita"  value={fmt(revenue)} emphasis="positive" />
+        <TooltipRow
+          divider
+          label={profit >= 0 ? '▲ Lucro' : '▼ Prejuízo'}
+          value={fmt(profit)}
+          emphasis={profit >= 0 ? 'positive' : 'negative'}
+        />
+      </TooltipShell>
+    )
+  }
 }
 
-export default function SpendRevenueChart({ data, loading }: Props) {
+export default function SpendRevenueChart({ data, loading, currency = 'BRL' }: Props) {
+  const CustomTooltip = makeTooltip(currency)
+  const fmt = (v: number) => formatCurrency(v, currency)
+
   if (loading) return <div className="skeleton h-64 w-full rounded-xl" />
 
   if (data.length === 1) {
@@ -60,12 +67,12 @@ export default function SpendRevenueChart({ data, loading }: Props) {
         <div className="flex gap-10">
           <div className="text-center">
             <p className="section-label mb-2">Gasto</p>
-            <p className="text-blue-400 font-extrabold text-3xl tabular-nums">{formatCurrency(d.spend)}</p>
+            <p className="text-blue-400 font-extrabold text-3xl tabular-nums">{fmt(d.spend)}</p>
           </div>
           <div className="w-px bg-surface-border" />
           <div className="text-center">
             <p className="section-label mb-2">Receita</p>
-            <p className="gradient-text-emerald text-3xl tabular-nums">{formatCurrency(d.revenue)}</p>
+            <p className="gradient-text-emerald text-3xl tabular-nums">{fmt(d.revenue)}</p>
           </div>
         </div>
       </div>

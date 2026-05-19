@@ -83,7 +83,7 @@ function cell(v: unknown, t: 'n'|'s', s?: Style, z?: string): any {
   return c
 }
 
-const FMT_CUR = '"R$ "#,##0.00'
+const FMT_CUR = '"$ "#,##0.00'
 const FMT_INT = '#,##0'
 const FMT_PCT = '0.00"%"'
 const FMT_ROI = '"+"\\"+"0.00\\"%\\";\"-\\"0.00\\"%\\"'

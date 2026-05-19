@@ -437,7 +437,7 @@ export default function CampanhasPage() {
                       <LegendDot color="#34d399" label="Receita" />
                     </div>
                   </div>
-                  <SpendRevenueChart data={chartData} loading={loading || chartLoading} />
+                  <SpendRevenueChart data={chartData} loading={loading || chartLoading} currency="USD" />
                 </div>
               </section>
 

@@ -1,12 +1,15 @@
 // ─── Number Formatting Utilities ─────────────────────────────────────────────
 
 export function formatCurrency(value: number, currency = 'BRL'): string {
-  return new Intl.NumberFormat('pt-BR', {
+  const formatted = new Intl.NumberFormat('pt-BR', {
     style:                 'currency',
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
+  // Intl usa "US$" para USD em pt-BR — substitui por "$" simples
+  if (currency === 'USD') return formatted.replace('US$', '$')
+  return formatted
 }
 
 export function formatPercent(value: number, decimals = 2): string {

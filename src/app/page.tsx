@@ -19,6 +19,9 @@ import InfoTooltip       from '@/components/InfoTooltip'
 import { formatCurrency, formatROI, formatNumber } from '@/lib/format'
 import type { DateRange, KPIData, ChartDataPoint, CampaignRow } from '@/lib/types'
 
+/* RedTrack envia valores em USD */
+const fmtUSD = (v: number) => formatCurrency(v, 'USD')
+
 function localDate(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -285,7 +288,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stagger">
               <KPICard
                 title="Gasto Total"
-                value={loading ? '—' : formatCurrency(kpis?.totalSpend ?? 0)}
+                value={loading ? '—' : fmtUSD(kpis?.totalSpend ?? 0)}
                 icon={DollarSign}
                 color="blue"
                 loading={loading}
@@ -293,7 +296,7 @@ export default function DashboardPage() {
               />
               <KPICard
                 title="Receita"
-                value={loading ? '—' : formatCurrency(kpis?.totalRevenue ?? 0)}
+                value={loading ? '—' : fmtUSD(kpis?.totalRevenue ?? 0)}
                 icon={TrendingUp}
                 color="emerald"
                 loading={loading}
@@ -301,7 +304,7 @@ export default function DashboardPage() {
               />
               <KPICard
                 title="Lucro"
-                value={loading ? '—' : formatCurrency(profit)}
+                value={loading ? '—' : fmtUSD(profit)}
                 icon={Activity}
                 color={isProfit ? 'emerald' : 'red'}
                 loading={loading}
@@ -436,7 +439,7 @@ export default function DashboardPage() {
                   </>
                 }
               >
-                <SpendRevenueChart data={chartData} loading={loading || chartLoading} />
+                <SpendRevenueChart data={chartData} loading={loading || chartLoading} currency="USD" />
               </ChartCard>
             </div>
           </section>

@@ -10,7 +10,7 @@ import clsx from 'clsx'
 import ROILineChart      from './ROILineChart'
 import SpendRevenueChart from './SpendRevenueChart'
 import InfoTooltip       from './InfoTooltip'
-import { formatCurrency, formatROI, formatNumber } from '@/lib/format'
+import { formatCurrency as _formatCurrency, formatROI, formatNumber } from '@/lib/format'
 import { exportRedTrackAds } from '@/lib/exportRedTrackExcel'
 import type { CampaignRow, ChartDataPoint, DateRange, AdRow } from '@/lib/types'
 
@@ -18,11 +18,14 @@ interface Props {
   campaign:  CampaignRow | null
   dateRange: DateRange
   onClose:   () => void
+  currency?: string
 }
 
 type AdSortField = 'cost' | 'revenue' | 'profit' | 'roi' | 'clicks' | 'purchases' | 'purchaseRate' | 'checkoutRate'
 
-export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) {
+export default function CampaignDrawer({ campaign, dateRange, onClose, currency = 'USD' }: Props) {
+  const formatCurrency = (v: number) => _formatCurrency(v, currency)
+
   const [chartData,    setChartData]    = useState<ChartDataPoint[]>([])
   const [ads,          setAds]          = useState<AdRow[] | null>(null)
   const [loading,      setLoading]      = useState(false)
@@ -351,7 +354,7 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
                     {/* Rows */}
                     <div className="divide-y divide-surface-border/60">
                       {sortedAds.map((ad, idx) => (
-                        <AdTableRow key={ad.id} ad={ad} rank={idx + 1} />
+                        <AdTableRow key={ad.id} ad={ad} rank={idx + 1} currency={currency} />
                       ))}
                     </div>
                   </div>
@@ -389,7 +392,7 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
                     text="Comparativo diário entre investimento e retorno." />
                 </div>
                 <p className="text-[11px] text-slate-500 mb-3 font-medium">Comparativo por dia</p>
-                <SpendRevenueChart data={chartData} loading={loading} />
+                <SpendRevenueChart data={chartData} loading={loading} currency={currency} />
               </div>
             </div>
           </section>
@@ -412,7 +415,8 @@ export default function CampaignDrawer({ campaign, dateRange, onClose }: Props) 
 }
 
 /* ─── Ad table row ────────────────────────────────────────────────────── */
-function AdTableRow({ ad, rank }: { ad: AdRow; rank: number }) {
+function AdTableRow({ ad, rank, currency = 'USD' }: { ad: AdRow; rank: number; currency?: string }) {
+  const formatCurrency = (v: number) => _formatCurrency(v, currency)
   const profitable = ad.profit >= 0
   const hasRev     = ad.revenue > 0
 
