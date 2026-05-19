@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import {
   ArrowUpDown, ArrowUp, ArrowDown, Search,
   ChevronRight, Inbox, X, Download, Loader2,
@@ -9,6 +9,9 @@ import clsx from 'clsx'
 import { formatCurrency, formatPercent, formatNumber, profitColor } from '@/lib/format'
 import { exportRedTrackCampaigns } from '@/lib/exportRedTrackExcel'
 import type { CampaignRow, SortField, SortDir } from '@/lib/types'
+
+/* ── Column resize initial widths (order matches makeColumns) ─────────────── */
+const INITIAL_COL_WIDTHS = [200, 72, 72, 72, 88, 60, 80, 80, 80, 80, 76]
 
 interface Props {
   campaigns: CampaignRow[]
@@ -34,8 +37,8 @@ function makeColumns(currency: string): Column[] {
   {
     key: 'name', label: 'Campanha', align: 'left',
     render: r => (
-      <div className="flex flex-col min-w-0 gap-0.5 max-w-[360px]">
-        <span className="font-semibold text-slate-100 text-sm leading-tight line-clamp-1">
+      <div className="flex flex-col min-w-0 gap-0.5 w-full overflow-hidden">
+        <span className="font-semibold text-slate-100 text-sm leading-tight truncate" title={r.name}>
           {r.name}
         </span>
         <span className="text-[10px] text-slate-500 font-mono truncate">
@@ -164,6 +167,28 @@ export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, 
   const [isExporting, setIsExporting] = useState(false)
   const PAGE_SIZE = 10
 
+  /* ── Column resize ────────────────────────────────────────────────────── */
+  const [colWidths, setColWidths] = useState(INITIAL_COL_WIDTHS)
+  const colWidthsRef = useRef(colWidths)
+  colWidthsRef.current = colWidths
+
+  const startColResize = useCallback((e: React.MouseEvent, idx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const x0 = e.clientX
+    const w0 = colWidthsRef.current[idx]
+    const onMove = (ev: MouseEvent) => {
+      const newW = Math.max(48, w0 + ev.clientX - x0)
+      setColWidths(p => { const n = [...p]; n[idx] = newW; return n })
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
+
   const COLUMNS = useMemo(() => makeColumns(currency), [currency])
 
   const handleSort = (field: SortField) => {
@@ -249,13 +274,22 @@ export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, 
 
       {/* ── Table wrapper ──────────────────────────────────────────────────── */}
       <div className="overflow-x-auto rounded-xl border border-surface-border">
-        <table className="w-full text-sm border-collapse">
+        <table
+          className="text-sm border-collapse"
+          style={{ tableLayout: 'fixed', width: colWidths.reduce((s, w) => s + w, 0) + (onSelect ? 48 : 0), minWidth: '100%' }}
+        >
+          <colgroup>
+            {COLUMNS.map((col, i) => (
+              <col key={col.key} style={{ width: colWidths[i], minWidth: colWidths[i] }} />
+            ))}
+            {onSelect && <col style={{ width: 48 }} />}
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-surface-border bg-surface-card2">
-              {COLUMNS.map(col => (
+              {COLUMNS.map((col, i) => (
                 <th
                   key={col.key}
-                  className={clsx('table-header', col.align === 'right' ? 'text-right' : 'text-left')}
+                  className={clsx('table-header relative select-none', col.align === 'right' ? 'text-right' : 'text-left')}
                   onClick={() => handleSort(col.key)}
                 >
                   <span className={clsx(
@@ -265,9 +299,17 @@ export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, 
                     {col.label}
                     <SortIcon field={col.key} />
                   </span>
+                  {/* Resize handle */}
+                  <div
+                    onMouseDown={e => startColResize(e, i)}
+                    onClick={e => e.stopPropagation()}
+                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group/rz flex items-center justify-center"
+                  >
+                    <div className="h-4 w-px bg-surface-border group-hover/rz:bg-brand-500/60 transition-colors" />
+                  </div>
                 </th>
               ))}
-              {onSelect && <th className="w-8" />}
+              {onSelect && <th className="w-12" />}
             </tr>
           </thead>
           <tbody>

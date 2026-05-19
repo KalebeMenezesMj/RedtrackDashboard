@@ -303,6 +303,33 @@ export default function UTMifyPage() {
     () => new Set(['ENABLED', 'ACTIVE'])
   )
 
+  /* ── UTMify column widths (para resize das colunas da tabela de campanhas) */
+  const [utmW, setUtmW] = useState({
+    icon: 22, name: 200, budget: 64, updatedAt: 76,
+    vendas: 34, cpa: 64, spend: 64, revenue: 64, profit: 66,
+    roas: 42, margin: 52, roi: 52, ic: 28, cpi: 62, cpc: 62,
+    ctr: 44, cpm: 62, impressions: 46, clicks: 40, chevron: 12,
+  })
+  const utmWRef = useRef(utmW)
+  utmWRef.current = utmW
+
+  const startUtmResize = useCallback((e: React.MouseEvent, key: keyof typeof utmW) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const x0 = e.clientX
+    const w0 = utmWRef.current[key]
+    const onMove = (ev: MouseEvent) => {
+      const newW = Math.max(30, w0 + ev.clientX - x0)
+      setUtmW(prev => ({ ...prev, [key]: newW }))
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
+
   // Drawer
   const [drawerOpen,    setDrawerOpen]    = useState(false)
   const [drawerTitle,   setDrawerTitle]   = useState('')
@@ -1220,57 +1247,81 @@ export default function UTMifyPage() {
                   const hasUpdate  = campLevel==='adsets'
                   const hasChevron = isClickable
                   const GT = [
-                    '22px',                    // status icon
-                    'minmax(60px,1fr)',         // name (flexible)
-                    '64px',                    // orçamento
-                    ...(hasUpdate?['76px']:[]),// ult.atualização (adsets only)
-                    '34px',                    // vendas
-                    '64px',                    // cpa
-                    '64px',                    // gasto
-                    '64px',                    // faturamento
-                    '66px',                    // lucro (negativo mais largo)
-                    '42px',                    // roas
-                    '52px',                    // margem
-                    '52px',                    // roi
-                    '28px',                    // ic
-                    '62px',                    // cpi
-                    '62px',                    // cpc
-                    '44px',                    // ctr
-                    '62px',                    // cpm
-                    '46px',                    // impressões
-                    '40px',                    // cliques
-                    ...(hasChevron?['12px']:[]),// chevron
+                    `${utmW.icon}px`,                          // status icon
+                    `minmax(60px,${utmW.name}px)`,             // name (flexible)
+                    `${utmW.budget}px`,                        // orçamento
+                    ...(hasUpdate?[`${utmW.updatedAt}px`]:[]), // ult.atualização (adsets only)
+                    `${utmW.vendas}px`,                        // vendas
+                    `${utmW.cpa}px`,                           // cpa
+                    `${utmW.spend}px`,                         // gasto
+                    `${utmW.revenue}px`,                       // faturamento
+                    `${utmW.profit}px`,                        // lucro
+                    `${utmW.roas}px`,                          // roas
+                    `${utmW.margin}px`,                        // margem
+                    `${utmW.roi}px`,                           // roi
+                    `${utmW.ic}px`,                            // ic
+                    `${utmW.cpi}px`,                           // cpi
+                    `${utmW.cpc}px`,                           // cpc
+                    `${utmW.ctr}px`,                           // ctr
+                    `${utmW.cpm}px`,                           // cpm
+                    `${utmW.impressions}px`,                   // impressões
+                    `${utmW.clicks}px`,                        // cliques
+                    ...(hasChevron?[`${utmW.chevron}px`]:[]),  // chevron
                   ].join(' ')
 
                   return (
                     <div className="space-y-1">
                       {/* ── Header + Rows num único container ──────────── */}
                       <div>
-                        {/* Header */}
-                        <div style={{gridTemplateColumns:GT}}
-                             className="hidden lg:grid gap-x-1 px-2 pb-1.5
-                                        text-[8.5px] font-semibold uppercase tracking-[0.07em]">
-                          <span/>{/* status */}
-                          <span className="text-slate-600 capitalize">{levelLabel}</span>
-                          <span className="text-right text-slate-600">Orç.</span>
-                          {hasUpdate&&<span className="text-right text-slate-600">Atual.</span>}
-                          {sortBtn('approvedOrdersCount','Vnd.')}
-                          {sortBtn('cpa','CPA')}
-                          {sortBtn('spend','Gasto')}
-                          {sortBtn('revenue','Fat.')}
-                          {sortBtn('profit','Lucro')}
-                          {sortBtn('roas','ROAS')}
-                          {sortBtn('margin','Mgm.')}
-                          {sortBtn('roi','ROI')}
-                          {sortBtn('ic','IC')}
-                          {sortBtn('cpi','CPI')}
-                          {sortBtn('cpc','CPC')}
-                          {sortBtn('ctr','CTR')}
-                          {sortBtn('cpm','CPM')}
-                          {sortBtn('impressions','Impr.')}
-                          {sortBtn('clicks','Clic.')}
-                          {hasChevron&&<span/>}
-                        </div>
+                        {/* Header com handles de resize */}
+                        {(() => {
+                          type UK = keyof typeof utmW
+                          // Handle de resize: posicionado absoluto na borda direita da célula
+                          const rz = (key: UK) => (
+                            <div
+                              onMouseDown={e => startUtmResize(e, key)}
+                              onClick={e => e.stopPropagation()}
+                              className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 flex items-center justify-center group/rz select-none"
+                            >
+                              <div className="h-3 w-px bg-surface-border group-hover/rz:bg-violet-500/60 transition-colors" />
+                            </div>
+                          )
+                          return (
+                            <div style={{gridTemplateColumns:GT}}
+                                 className="hidden lg:grid gap-x-1 px-2 pb-1.5
+                                            text-[8.5px] font-semibold uppercase tracking-[0.07em]">
+                              <span/>{/* status icon — não redimensionável */}
+                              <div className="relative">{/* name */}
+                                <span className="text-slate-600 capitalize">{levelLabel}</span>
+                                {rz('name')}
+                              </div>
+                              <div className="relative flex justify-end">
+                                <span className="text-slate-600">Orç.</span>{rz('budget')}
+                              </div>
+                              {hasUpdate && (
+                                <div className="relative flex justify-end">
+                                  <span className="text-slate-600">Atual.</span>{rz('updatedAt')}
+                                </div>
+                              )}
+                              <div className="relative">{sortBtn('approvedOrdersCount','Vnd.')}{rz('vendas')}</div>
+                              <div className="relative">{sortBtn('cpa','CPA')}{rz('cpa')}</div>
+                              <div className="relative">{sortBtn('spend','Gasto')}{rz('spend')}</div>
+                              <div className="relative">{sortBtn('revenue','Fat.')}{rz('revenue')}</div>
+                              <div className="relative">{sortBtn('profit','Lucro')}{rz('profit')}</div>
+                              <div className="relative">{sortBtn('roas','ROAS')}{rz('roas')}</div>
+                              <div className="relative">{sortBtn('margin','Mgm.')}{rz('margin')}</div>
+                              <div className="relative">{sortBtn('roi','ROI')}{rz('roi')}</div>
+                              <div className="relative">{sortBtn('ic','IC')}{rz('ic')}</div>
+                              <div className="relative">{sortBtn('cpi','CPI')}{rz('cpi')}</div>
+                              <div className="relative">{sortBtn('cpc','CPC')}{rz('cpc')}</div>
+                              <div className="relative">{sortBtn('ctr','CTR')}{rz('ctr')}</div>
+                              <div className="relative">{sortBtn('cpm','CPM')}{rz('cpm')}</div>
+                              <div className="relative">{sortBtn('impressions','Impr.')}{rz('impressions')}</div>
+                              <div className="relative">{sortBtn('clicks','Clic.')}{rz('clicks')}</div>
+                              {hasChevron&&<span/>}
+                            </div>
+                          )
+                        })()}
 
                         {/* Rows */}
                         <div className="space-y-1">
