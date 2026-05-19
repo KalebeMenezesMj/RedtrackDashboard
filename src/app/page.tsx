@@ -474,6 +474,7 @@ export default function DashboardPage() {
                   onSelect={setSelectedCampaign}
                   dateFrom={dateRange.from}
                   dateTo={dateRange.to}
+                  currency="USD"
                 />
               </div>
             </div>

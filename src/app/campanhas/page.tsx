@@ -464,6 +464,7 @@ export default function CampanhasPage() {
                     onSelect={setSelectedCampaign}
                     dateFrom={dateRange.from}
                     dateTo={dateRange.to}
+                    currency="USD"
                   />
                 </div>
               </section>

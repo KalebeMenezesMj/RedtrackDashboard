@@ -16,6 +16,7 @@ interface Props {
   onSelect?: (campaign: CampaignRow) => void
   dateFrom?: string
   dateTo?:   string
+  currency?: string
 }
 
 interface Column {
@@ -27,7 +28,9 @@ interface Column {
 }
 
 /* ── Columns ──────────────────────────────────────────────────────────────── */
-const COLUMNS: Column[] = [
+function makeColumns(currency: string): Column[] {
+  const fmt = (v: number) => formatCurrency(v, currency)
+  return [
   {
     key: 'name', label: 'Campanha', align: 'left',
     render: r => (
@@ -74,13 +77,13 @@ const COLUMNS: Column[] = [
   },
   {
     key: 'cost', label: 'Gasto', align: 'right',
-    render: r => <span className="tabular-nums text-slate-300 font-medium">{formatCurrency(r.cost)}</span>,
+    render: r => <span className="tabular-nums text-slate-300 font-medium">{fmt(r.cost)}</span>,
   },
   {
     key: 'revenue', label: 'Receita', align: 'right',
     render: r => (
       <span className="tabular-nums text-emerald-400 font-bold">
-        {formatCurrency(r.revenue)}
+        {fmt(r.revenue)}
       </span>
     ),
   },
@@ -88,21 +91,22 @@ const COLUMNS: Column[] = [
     key: 'profit', label: 'Lucro', align: 'right',
     render: r => (
       <span className={clsx('tabular-nums font-bold', profitColor(r.profit))}>
-        {formatCurrency(r.profit)}
+        {fmt(r.profit)}
       </span>
     ),
   },
   {
     key: 'cpa', label: 'CPA', align: 'right',
     render: r => r.conversions > 0
-      ? <span className="tabular-nums text-slate-300 font-medium">{formatCurrency(r.cpa)}</span>
+      ? <span className="tabular-nums text-slate-300 font-medium">{fmt(r.cpa)}</span>
       : <span className="text-slate-600">—</span>,
   },
   {
     key: 'roi', label: 'ROI', align: 'right',
     render: r => <RoiChip roi={r.roi} />,
   },
-]
+  ]
+}
 
 /* ── ROI chip ─────────────────────────────────────────────────────────────── */
 function RoiChip({ roi }: { roi: number }) {
@@ -128,7 +132,7 @@ function RoiChip({ roi }: { roi: number }) {
 }
 
 /* ── Skeleton rows ────────────────────────────────────────────────────────── */
-function SkeletonRows() {
+function SkeletonRows({ columns }: { columns: Column[] }) {
   return (
     <>
       {Array.from({ length: 7 }).map((_, i) => (
@@ -139,7 +143,7 @@ function SkeletonRows() {
               <div className="skeleton h-2.5 rounded-md w-24" />
             </div>
           </td>
-          {COLUMNS.slice(1).map(c => (
+          {columns.slice(1).map(c => (
             <td key={c.key} className="table-cell text-right">
               <div className="skeleton h-4 rounded-lg w-16 ml-auto" />
             </td>
@@ -152,13 +156,15 @@ function SkeletonRows() {
 }
 
 /* ── Table ────────────────────────────────────────────────────────────────── */
-export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, dateTo }: Props) {
+export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, dateTo, currency = 'USD' }: Props) {
   const [sortField,   setSortField]   = useState<SortField>('revenue')
   const [sortDir,     setSortDir]     = useState<SortDir>('desc')
   const [search,      setSearch]      = useState('')
   const [page,        setPage]        = useState(1)
   const [isExporting, setIsExporting] = useState(false)
   const PAGE_SIZE = 10
+
+  const COLUMNS = useMemo(() => makeColumns(currency), [currency])
 
   const handleSort = (field: SortField) => {
     if (field === sortField) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -266,7 +272,7 @@ export default function CampaignTable({ campaigns, loading, onSelect, dateFrom, 
           </thead>
           <tbody>
             {loading ? (
-              <SkeletonRows />
+              <SkeletonRows columns={COLUMNS} />
             ) : paginated.length === 0 ? (
               <tr>
                 <td
