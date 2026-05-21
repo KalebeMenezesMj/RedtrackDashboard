@@ -6,6 +6,7 @@ import {
   Shield, Users, Globe, Monitor, Smartphone, Tablet,
   Clock, TrendingUp, LogOut, RefreshCw, Loader2,
   MapPin, Link2, Languages, Chrome, BarChart2,
+  Key, Trash2, Plus, CheckCircle2, AlertCircle, Eye, EyeOff,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { Stats, VisitRecord } from '@/lib/analytics'
@@ -211,11 +212,241 @@ function RecentVisits({ visits }: { visits: VisitRecord[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Facebook token management (admin tab)
+// ---------------------------------------------------------------------------
+
+interface FBTokenItem {
+  id:           string
+  label:        string
+  token:        string   // masked
+  fb_user_name: string | null
+  created_at:   string
+}
+
+function MetaIcon({ size = 14, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  )
+}
+
+function FacebookTab() {
+  const [tokens,    setTokens]    = useState<FBTokenItem[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState('')
+  const [label,     setLabel]     = useState('')
+  const [token,     setToken]     = useState('')
+  const [showToken, setShowToken] = useState(false)
+  const [adding,    setAdding]    = useState(false)
+  const [addError,  setAddError]  = useState('')
+  const [addOk,     setAddOk]     = useState('')
+  const [syncing,   setSyncing]   = useState<string | null>(null)
+  const [syncMsg,   setSyncMsg]   = useState<Record<string, string>>({})
+  const [deleting,  setDeleting]  = useState<string | null>(null)
+
+  const loadTokens = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res  = await fetch('/api/admin/facebook/tokens')
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setTokens(json.tokens ?? [])
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadTokens() }, [loadTokens])
+
+  async function handleAdd() {
+    if (!label.trim() || !token.trim()) return
+    setAdding(true); setAddError(''); setAddOk('')
+    try {
+      const res  = await fetch('/api/admin/facebook/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: label.trim(), token: token.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setAddOk(`Token adicionado! Conta FB: ${json.fb_user_name ?? ''}`)
+      setLabel(''); setToken('')
+      loadTokens()
+    } catch (e) {
+      setAddError(String(e))
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function handleSync(id: string) {
+    setSyncing(id)
+    setSyncMsg(prev => ({ ...prev, [id]: '' }))
+    try {
+      const res  = await fetch(`/api/admin/facebook/tokens/${id}/sync`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setSyncMsg(prev => ({ ...prev, [id]: `${json.synced} conta(s) sincronizada(s)` }))
+    } catch (e) {
+      setSyncMsg(prev => ({ ...prev, [id]: `Erro: ${String(e)}` }))
+    } finally {
+      setSyncing(null)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Remover este token? As contas de anúncio associadas também serão removidas.')) return
+    setDeleting(id)
+    try {
+      await fetch(`/api/admin/facebook/tokens/${id}`, { method: 'DELETE' })
+      setTokens(prev => prev.filter(t => t.id !== id))
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Add form */}
+      <div className="card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <MetaIcon size={15} className="text-blue-400 shrink-0" />
+          <h2 className="text-sm font-semibold text-slate-200">Adicionar token de acesso</h2>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] text-slate-500 font-medium block mb-1">Nome / identificação</label>
+            <input
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder="Ex: Conta da Filomena"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5 text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/60"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mb-1">
+              <Key size={10} /> Access Token
+            </label>
+            <div className="relative">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={token}
+                onChange={e => setToken(e.target.value)}
+                placeholder="EAAxxxxx…"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5 pr-12 text-xs text-slate-300 font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/60"
+              />
+              <button type="button" onClick={() => setShowToken(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-400">
+                {showToken ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {addError && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500/25 bg-red-500/10 text-red-400 text-xs">
+            <AlertCircle size={12} className="shrink-0 mt-0.5" />
+            {addError}
+          </div>
+        )}
+        {addOk && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 text-xs">
+            <CheckCircle2 size={12} className="shrink-0 mt-0.5" />
+            {addOk}
+          </div>
+        )}
+
+        <button
+          onClick={handleAdd}
+          disabled={!label.trim() || !token.trim() || adding}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all',
+            label.trim() && token.trim() && !adding
+              ? 'bg-blue-600 hover:bg-blue-500 text-white'
+              : 'bg-slate-700 text-slate-500 cursor-not-allowed',
+          )}
+        >
+          {adding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          {adding ? 'Validando…' : 'Adicionar token'}
+        </button>
+      </div>
+
+      {/* Token list */}
+      {loading && (
+        <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-slate-500" /></div>
+      )}
+      {error && (
+        <div className="px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 text-sm">{error}</div>
+      )}
+      {!loading && tokens.length === 0 && (
+        <div className="card p-8 text-center text-slate-500 text-sm">Nenhum token salvo ainda.</div>
+      )}
+
+      <div className="space-y-3">
+        {tokens.map(t => (
+          <div key={t.id} className="card overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0">
+                <MetaIcon size={14} className="text-blue-400" />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-200 truncate">{t.label}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {t.fb_user_name && <span className="text-[10px] text-slate-500">{t.fb_user_name}</span>}
+                  <span className="text-[10px] font-mono text-slate-700">{t.token}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {syncMsg[t.id] && (
+                  <span className={clsx(
+                    'text-[10px]',
+                    syncMsg[t.id].startsWith('Erro') ? 'text-red-400' : 'text-emerald-400',
+                  )}>
+                    {syncMsg[t.id]}
+                  </span>
+                )}
+
+                <button
+                  onClick={() => handleSync(t.id)}
+                  disabled={syncing === t.id}
+                  title="Sincronizar contas de anúncio"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-blue-500/40 text-xs transition-all"
+                >
+                  {syncing === t.id
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <RefreshCw size={12} />
+                  }
+                  Sincronizar
+                </button>
+
+                <button
+                  onClick={() => handleDelete(t.id)}
+                  disabled={deleting === t.id}
+                  className="p-1.5 rounded-lg border border-slate-700 text-slate-600 hover:text-red-400 hover:border-red-500/30 transition-colors"
+                >
+                  {deleting === t.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
 
 export default function AdminDashboard() {
   const router  = useRouter()
+  const [tab, setTab] = useState<'analytics' | 'facebook'>('analytics')
   const [stats, setStats]   = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState('')
@@ -282,21 +513,52 @@ export default function AdminDashboard() {
         </div>
       </header>
 
+      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+        <div className="flex gap-1 p-1 rounded-xl border border-slate-700 bg-slate-900/50 w-fit">
+          <button
+            onClick={() => setTab('analytics')}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all',
+              tab === 'analytics' ? 'bg-violet-600 text-white shadow' : 'text-slate-500 hover:text-slate-300',
+            )}
+          >
+            <BarChart2 size={13} />
+            Analytics
+          </button>
+          <button
+            onClick={() => setTab('facebook')}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all',
+              tab === 'facebook' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-slate-300',
+            )}
+          >
+            <MetaIcon size={13} />
+            Facebook
+          </button>
+        </div>
+      </div>
+
       {/* ── Conteúdo ─────────────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {error && (
+
+        {/* Facebook tab */}
+        {tab === 'facebook' && <FacebookTab />}
+
+        {/* Analytics tab */}
+        {tab === 'analytics' && error && (
           <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {error}
           </div>
         )}
 
-        {loading && !stats && (
+        {tab === 'analytics' && loading && !stats && (
           <div className="flex items-center justify-center py-24">
             <Loader2 size={28} className="animate-spin text-violet-400" />
           </div>
         )}
 
-        {stats && (
+        {tab === 'analytics' && stats && (
           <>
             {/* ── Cards de totais ─────────────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

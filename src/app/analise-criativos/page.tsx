@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -21,6 +21,9 @@ import {
   TrendingUp,
   Activity,
   ShoppingCart,
+  Key,
+  Calendar,
+  AlertCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -1317,14 +1320,893 @@ function Stage4Section({
 }
 
 // ---------------------------------------------------------------------------
+// MetaIcon — Facebook "f" logo as inline SVG (Lucide doesn't have it)
+// ---------------------------------------------------------------------------
+
+function MetaIcon({ size = 14, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Shared types + constants
+// ---------------------------------------------------------------------------
+
+interface FBAccount {
+  id:          string
+  name:        string
+  active:      boolean
+  statusLabel: string
+  currency:    string
+  adCount:     number
+}
+
+interface FBAccountWithRows extends FBAccount {
+  rows: AdRow[]
+}
+
+const DATE_PRESETS = [
+  { value: 'last_7d',  label: 'Últimos 7 dias' },
+  { value: 'last_14d', label: 'Últimos 14 dias' },
+  { value: 'last_30d', label: 'Últimos 30 dias' },
+  { value: 'last_60d', label: 'Últimos 60 dias' },
+  { value: 'last_90d', label: 'Últimos 90 dias' },
+]
+
+// ---------------------------------------------------------------------------
+// Step 1 — FBTokenForm: enter token → list ad accounts
+// ---------------------------------------------------------------------------
+
+interface FBTokenFormProps {
+  onAccounts: (accounts: FBAccount[], token: string, datePreset: string) => void
+}
+
+function FBTokenForm({ onAccounts }: FBTokenFormProps) {
+  const [token,      setToken]      = useState('')
+  const [showToken,  setShowToken]  = useState(false)
+  const [datePreset, setDatePreset] = useState('last_30d')
+  const [fetching,   setFetching]   = useState(false)
+  const [error,      setError]      = useState<string | null>(null)
+
+  async function handleFetch() {
+    if (!token.trim()) return
+    setFetching(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/facebook/adaccounts?token=${encodeURIComponent(token.trim())}`)
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error ?? `Erro ${res.status}`)
+      const accounts: FBAccount[] = json.accounts ?? []
+      if (accounts.length === 0) {
+        setError('Nenhuma conta de anúncios encontrada para este token.')
+        return
+      }
+      onAccounts(accounts, token.trim(), datePreset)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao buscar contas')
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  const canFetch = token.trim().length > 10 && !fetching
+
+  return (
+    <div className="space-y-4">
+      {/* Instructions */}
+      <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3.5 space-y-2">
+        <p className="text-xs font-semibold text-blue-300 flex items-center gap-2">
+          <MetaIcon size={12} className="shrink-0" />
+          Como obter o Access Token
+        </p>
+        <ol className="space-y-1 text-[11px] text-slate-400">
+          {[
+            <>Acesse o <a href="https://developers.facebook.com/tools/explorer" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">Meta Graph API Explorer</a></>,
+            <>Selecione seu App · clique em <span className="text-slate-200">Generate Access Token</span></>,
+            <>Adicione as permissões <span className="font-mono text-[10px] text-slate-200">ads_read</span> e <span className="font-mono text-[10px] text-slate-200">read_insights</span></>,
+            <>Cole o token abaixo — as contas serão listadas com a quantidade de anúncios</>,
+          ].map((step, i) => (
+            <li key={i} className="flex gap-2 items-start">
+              <span className="w-4 h-4 rounded-full bg-blue-500/20 text-blue-400 text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Token input */}
+      <div>
+        <label className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
+          <Key size={11} />
+          Access Token
+        </label>
+        <div className="relative">
+          <input
+            type={showToken ? 'text' : 'password'}
+            value={token}
+            onChange={e => setToken(e.target.value)}
+            placeholder="EAAxxxxx…"
+            className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5 pr-14 text-xs text-slate-300 font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/60"
+          />
+          <button
+            type="button"
+            onClick={() => setShowToken(v => !v)}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 hover:text-slate-400"
+          >
+            {showToken ? 'ocultar' : 'ver'}
+          </button>
+        </div>
+      </div>
+
+      {/* Date preset */}
+      <div>
+        <label className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
+          <Calendar size={11} />
+          Período de análise
+        </label>
+        <select
+          value={datePreset}
+          onChange={e => setDatePreset(e.target.value)}
+          className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500/60 cursor-pointer"
+        >
+          {DATE_PRESETS.map(p => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
+          <AlertCircle size={13} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Fetch button */}
+      <button
+        onClick={handleFetch}
+        disabled={!canFetch}
+        className={clsx(
+          'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all',
+          canFetch
+            ? 'bg-blue-600 hover:bg-blue-500 text-white'
+            : 'bg-slate-700 text-slate-500 cursor-not-allowed',
+        )}
+      >
+        {fetching ? (
+          <>
+            <Loader2 size={15} className="animate-spin" />
+            Listando contas…
+          </>
+        ) : (
+          <>
+            <MetaIcon size={14} />
+            Listar contas de anúncios
+          </>
+        )}
+      </button>
+
+      <p className="text-[10px] text-slate-600 text-center">
+        O token não é salvo — usado apenas para consultar as contas via API.
+      </p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 — AccountSelector: pick accounts, then fetch their insights
+// ---------------------------------------------------------------------------
+
+interface AccountSelectorProps {
+  accounts:   FBAccount[]
+  token:      string
+  datePreset: string
+  onNext:     (accountsWithRows: FBAccountWithRows[], dateLabel: string) => void
+  onBack:     () => void
+}
+
+function AccountRow({ acc, checked, onToggle }: { acc: FBAccount; checked: boolean; onToggle: () => void }) {
+  return (
+    <div
+      onClick={onToggle}
+      className={clsx(
+        'flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all',
+        checked
+          ? 'border-blue-500/40 bg-blue-500/5 hover:bg-blue-500/10'
+          : 'border-slate-700 bg-slate-900/40 hover:bg-slate-800/50 opacity-60',
+      )}
+    >
+      {/* Checkbox */}
+      <div className={clsx(
+        'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+        checked ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800',
+      )}>
+        {checked && <Check size={9} className="text-white" />}
+      </div>
+
+      {/* Account info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-slate-200 truncate">{acc.name}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className={clsx(
+            'text-[9px] font-bold px-1.5 py-0.5 rounded border',
+            acc.active
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+              : 'bg-slate-700/50 text-slate-500 border-slate-700',
+          )}>
+            {acc.statusLabel}
+          </span>
+          <span className="text-[10px] text-slate-600">{acc.currency}</span>
+        </div>
+      </div>
+
+      {/* Ad count */}
+      <div className="text-right shrink-0">
+        <p className="text-sm font-bold text-slate-200 tabular-nums">{acc.adCount.toLocaleString('pt-BR')}</p>
+        <p className="text-[10px] text-slate-600">anúncios</p>
+      </div>
+    </div>
+  )
+}
+
+function AccountSelector({ accounts, token, datePreset, onNext, onBack }: AccountSelectorProps) {
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(accounts.filter(a => a.active).map(a => a.id)),
+  )
+  const [fetching, setFetching] = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+
+  const selectedAccounts = accounts.filter(a => selected.has(a.id))
+  const totalAds = selectedAccounts.reduce((s, a) => s + a.adCount, 0)
+
+  function toggle(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function selectAll()   { setSelected(new Set(accounts.map(a => a.id))) }
+  function deselectAll() { setSelected(new Set()) }
+
+  async function handleNext() {
+    if (selected.size === 0) return
+    setFetching(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/facebook/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: token,
+          adAccountIds: selectedAccounts.map(a => ({ id: a.id, name: a.name })),
+          datePreset,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error ?? `Erro ${res.status}`)
+      const accountsWithRows: FBAccountWithRows[] = (json.accounts ?? []).map((a: FBAccountWithRows) => ({
+        ...accounts.find(x => x.id === a.id),
+        ...a,
+      }))
+      if (accountsWithRows.length === 0) {
+        setError(
+          `Nenhum anúncio de vídeo encontrado nas contas selecionadas no período. ` +
+          `Tente selecionar outras contas ou um período diferente.`,
+        )
+        return
+      }
+      const preset = DATE_PRESETS.find(p => p.value === datePreset)?.label ?? datePreset
+      onNext(accountsWithRows, preset)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao buscar métricas')
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Sticky toolbar */}
+      <div className="sticky top-0 z-10 bg-surface-card/95 backdrop-blur border-b border-surface-border px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-600 px-2.5 py-1.5 rounded-lg transition-colors shrink-0"
+        >
+          <ArrowLeft size={13} />
+          Voltar
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-200 leading-tight">Selecione as contas</p>
+          <p className="text-[11px] text-slate-500">
+            {accounts.length} conta{accounts.length !== 1 ? 's' : ''} encontrada{accounts.length !== 1 ? 's' : ''} · {selected.size} selecionada{selected.size !== 1 ? 's' : ''} · ~{totalAds.toLocaleString('pt-BR')} anúncios
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={selectAll}   className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">Todas</button>
+          <span className="text-slate-700">·</span>
+          <button onClick={deselectAll} className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">Nenhuma</button>
+
+          <button
+            onClick={handleNext}
+            disabled={selected.size === 0 || fetching}
+            className={clsx(
+              'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all',
+              selected.size > 0 && !fetching
+                ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                : 'bg-slate-700 text-slate-500 cursor-not-allowed',
+            )}
+          >
+            {fetching ? (
+              <>
+                <Loader2 size={13} className="animate-spin" />
+                Buscando anúncios…
+              </>
+            ) : (
+              <>
+                Ver anúncios
+                <ArrowRight size={13} />
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
+          <AlertCircle size={13} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Account list */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2 max-w-3xl mx-auto w-full">
+        {accounts.map(acc => (
+          <AccountRow
+            key={acc.id}
+            acc={acc}
+            checked={selected.has(acc.id)}
+            onToggle={() => toggle(acc.id)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 — AdSelector: pick individual ads → analyze
+// ---------------------------------------------------------------------------
+
+interface AdSelectorProps {
+  accounts:  FBAccountWithRows[]
+  dateLabel: string
+  onAnalyze: (rows: AdRow[], sourceLabel: string) => void
+  onBack:    () => void
+}
+
+function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps) {
+  // Set of "accountId::adName" → selected
+  const allKeys = accounts.flatMap(a => a.rows.map(r => `${a.id}::${r.name}`))
+  const [selected, setSelected] = useState<Set<string>>(new Set(allKeys))
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  const totalAds     = accounts.reduce((s, a) => s + a.rows.length, 0)
+  const selectedCount = selected.size
+
+  function toggleAd(key: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  function toggleAccount(accId: string, rows: AdRow[]) {
+    const keys = rows.map(r => `${accId}::${r.name}`)
+    const allSelected = keys.every(k => selected.has(k))
+    setSelected(prev => {
+      const next = new Set(prev)
+      allSelected ? keys.forEach(k => next.delete(k)) : keys.forEach(k => next.add(k))
+      return next
+    })
+  }
+
+  function toggleCollapse(accId: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      next.has(accId) ? next.delete(accId) : next.add(accId)
+      return next
+    })
+  }
+
+  function selectAll()   { setSelected(new Set(allKeys)) }
+  function deselectAll() { setSelected(new Set()) }
+
+  function handleAnalyze() {
+    const rows: AdRow[] = []
+    for (const acc of accounts) {
+      for (const row of acc.rows) {
+        if (selected.has(`${acc.id}::${row.name}`)) rows.push(row)
+      }
+    }
+    const scanned  = accounts.length
+    const withData = accounts.filter(a => a.rows.some(r => selected.has(`${a.id}::${r.name}`))).length
+    onAnalyze(rows, `Facebook · ${dateLabel} · ${withData}/${scanned} contas · ${rows.length} anúncios`)
+  }
+
+  function fmtPct(v: number) { return (v * 100).toFixed(1) + '%' }
+
+  return (
+    <div className="flex flex-col h-full">
+
+      {/* Sticky toolbar */}
+      <div className="sticky top-0 z-10 bg-surface-card/95 backdrop-blur border-b border-surface-border px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-600 px-2.5 py-1.5 rounded-lg transition-colors shrink-0"
+        >
+          <ArrowLeft size={13} />
+          Voltar
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-200 leading-tight">
+            Selecione os anúncios para analisar
+          </p>
+          <p className="text-[11px] text-slate-500">
+            {accounts.length} conta{accounts.length !== 1 ? 's' : ''} · {totalAds} anúncios com dados de vídeo · {dateLabel}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={selectAll}   className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">Todos</button>
+          <span className="text-slate-700">·</span>
+          <button onClick={deselectAll} className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">Nenhum</button>
+
+          <button
+            onClick={handleAnalyze}
+            disabled={selectedCount === 0}
+            className={clsx(
+              'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all',
+              selectedCount > 0
+                ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                : 'bg-slate-700 text-slate-500 cursor-not-allowed',
+            )}
+          >
+            <Sparkles size={13} />
+            Analisar {selectedCount > 0 ? selectedCount : ''} anúncio{selectedCount !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
+
+      {/* Account list */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 max-w-5xl mx-auto w-full">
+        {accounts.map(acc => {
+          const accKeys    = acc.rows.map(r => `${acc.id}::${r.name}`)
+          const allSel     = accKeys.every(k => selected.has(k))
+          const someSel    = accKeys.some(k => selected.has(k))
+          const selCount   = accKeys.filter(k => selected.has(k)).length
+          const isCollapsed = collapsed.has(acc.id)
+
+          return (
+            <div key={acc.id} className="card overflow-hidden">
+              {/* Account header */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-slate-900/40 border-b border-surface-border">
+                {/* Checkbox */}
+                <button
+                  onClick={() => toggleAccount(acc.id, acc.rows)}
+                  className={clsx(
+                    'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                    allSel
+                      ? 'bg-blue-500 border-blue-500'
+                      : someSel
+                        ? 'bg-blue-500/40 border-blue-500/60'
+                        : 'border-slate-600 bg-slate-800 hover:border-slate-500',
+                  )}
+                >
+                  {allSel && <Check size={10} className="text-white" />}
+                  {someSel && !allSel && <div className="w-2 h-0.5 bg-white rounded-full" />}
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-200 truncate">{acc.name}</p>
+                  <p className="text-[10px] text-slate-600 font-mono">{acc.id}</p>
+                </div>
+
+                <span className={clsx(
+                  'text-[10px] font-semibold px-2 py-0.5 rounded border shrink-0',
+                  selCount > 0
+                    ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                    : 'bg-slate-800 text-slate-600 border-slate-700',
+                )}>
+                  {selCount}/{acc.rows.length}
+                </span>
+
+                <button
+                  onClick={() => toggleCollapse(acc.id)}
+                  className="text-slate-600 hover:text-slate-400 transition-colors shrink-0"
+                >
+                  {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                </button>
+              </div>
+
+              {/* Ad rows */}
+              {!isCollapsed && (
+                <div className="divide-y divide-slate-800/40">
+                  {/* Column headers */}
+                  <div className="grid grid-cols-[1.5rem_1fr_5rem_5rem_5rem_5rem] gap-x-3 px-4 py-1.5 bg-slate-900/20 text-[9px] text-slate-600 uppercase tracking-wider font-semibold">
+                    <span/>
+                    <span>Anúncio</span>
+                    <span className="text-right">Play Rate</span>
+                    <span className="text-right">Hook Ret.</span>
+                    <span className="text-right">Body Conv.</span>
+                    <span className="text-right">Body Ret.</span>
+                  </div>
+
+                  {acc.rows.map(row => {
+                    const key     = `${acc.id}::${row.name}`
+                    const checked = selected.has(key)
+                    return (
+                      <div
+                        key={key}
+                        onClick={() => toggleAd(key)}
+                        className={clsx(
+                          'grid grid-cols-[1.5rem_1fr_5rem_5rem_5rem_5rem] gap-x-3 px-4 py-2.5 items-center cursor-pointer transition-colors',
+                          checked ? 'hover:bg-blue-500/5' : 'opacity-40 hover:opacity-60',
+                        )}
+                      >
+                        {/* Checkbox */}
+                        <div className={clsx(
+                          'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                          checked
+                            ? 'bg-blue-500 border-blue-500'
+                            : 'border-slate-600 bg-slate-800',
+                        )}>
+                          {checked && <Check size={9} className="text-white" />}
+                        </div>
+
+                        {/* Name */}
+                        <span title={row.name} className="text-[11px] text-slate-300 font-mono truncate min-w-0">
+                          {row.name}
+                        </span>
+
+                        {/* Metrics */}
+                        <span className="text-[11px] tabular-nums text-right text-sky-400">{fmtPct(row.playRate)}</span>
+                        <span className="text-[11px] tabular-nums text-right text-emerald-400">{fmtPct(row.hookRetention)}</span>
+                        <span className="text-[11px] tabular-nums text-right text-yellow-400">{fmtPct(row.bodyConversion)}</span>
+                        <span className="text-[11px] tabular-nums text-right text-purple-400">{fmtPct(row.bodyRetention)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// FacebookSection — lista contas conectadas + seleção + busca de insights
+// ---------------------------------------------------------------------------
+
+interface ConnectedAdAccount {
+  id:           string
+  account_id:   string
+  account_name: string
+  is_active:    boolean
+  enabled:      boolean
+  status_label: string | null
+  currency:     string | null
+  ad_count:     number
+}
+
+interface ConnectedToken {
+  id:           string
+  label:        string
+  fb_user_name: string | null
+  ad_accounts:  ConnectedAdAccount[]
+}
+
+interface FacebookSectionProps {
+  onNext: (accountsWithRows: FBAccountWithRows[], dateLabel: string) => void
+}
+
+function FacebookSection({ onNext }: FacebookSectionProps) {
+  const [tokens,     setTokens]     = useState<ConnectedToken[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [loadError,  setLoadError]  = useState<string | null>(null)
+  const [selected,   setSelected]   = useState<Set<string>>(new Set())
+  const [datePreset, setDatePreset] = useState('last_30d')
+  const [fetching,   setFetching]   = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  // Auto-load accounts on mount
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const res  = await fetch('/api/facebook/accounts')
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? `Erro ${res.status}`)
+        const tkns: ConnectedToken[] = (json.tokens ?? []).map((t: ConnectedToken) => ({
+          ...t,
+          ad_accounts: t.ad_accounts.filter(a => a.enabled),
+        }))
+        setTokens(tkns)
+        // Select all visible accounts with ads by default
+        const ids = new Set(tkns.flatMap(t => t.ad_accounts.filter(a => a.ad_count > 0).map(a => a.account_id)))
+        setSelected(ids)
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : 'Erro ao carregar contas')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const allAccountIds = tokens.flatMap(t => t.ad_accounts.map(a => a.account_id))
+  const selectedCount = selected.size
+  const totalAds      = tokens
+    .flatMap(t => t.ad_accounts)
+    .filter(a => selected.has(a.account_id))
+    .reduce((s, a) => s + a.ad_count, 0)
+
+  function toggle(accountId: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(accountId) ? next.delete(accountId) : next.add(accountId)
+      return next
+    })
+  }
+
+  function selectAll()   { setSelected(new Set(allAccountIds)) }
+  function deselectAll() { setSelected(new Set()) }
+
+  async function handleFetch() {
+    if (selected.size === 0) return
+    setFetching(true)
+    setFetchError(null)
+    try {
+      const res = await fetch('/api/facebook/insights-saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datePreset, accountIds: [...selected] }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error ?? `Erro ${res.status}`)
+
+      const accounts: FBAccountWithRows[] = (json.accounts ?? []).map((a: FBAccountWithRows) => ({
+        id:           a.id,
+        name:         a.name,
+        active:       true,
+        statusLabel:  '',
+        currency:     '',
+        adCount:      a.rows.length,
+        rows:         a.rows,
+      }))
+
+      if (accounts.length === 0) {
+        setFetchError('Nenhum anúncio de vídeo encontrado nas contas selecionadas. Tente outro período.')
+        return
+      }
+
+      const preset = DATE_PRESETS.find(p => p.value === datePreset)?.label ?? datePreset
+      onNext(accounts, preset)
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : 'Erro ao buscar anúncios')
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  // ── Loading state
+  if (loading) {
+    return (
+      <div className="card p-8 flex items-center justify-center gap-2 text-slate-500 text-sm">
+        <Loader2 size={16} className="animate-spin" />
+        Carregando contas conectadas…
+      </div>
+    )
+  }
+
+  // ── Error loading
+  if (loadError) {
+    return (
+      <div className="card p-5 space-y-3">
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
+          <AlertCircle size={13} className="shrink-0 mt-0.5" />
+          <span>{loadError}</span>
+        </div>
+      </div>
+    )
+  }
+
+  // ── No tokens configured
+  if (tokens.length === 0) {
+    return (
+      <div className="card p-8 text-center space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto">
+          <MetaIcon size={20} className="text-blue-400" />
+        </div>
+        <p className="text-sm font-semibold text-slate-300">Nenhuma conta conectada</p>
+        <p className="text-xs text-slate-500">
+          Solicite ao administrador que adicione um token no{' '}
+          <a href="/admin/dashboard" className="text-blue-400 underline hover:text-blue-300">Painel Admin</a>.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Account list */}
+      <div className="card overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900/40 border-b border-surface-border">
+          <p className="text-[11px] text-slate-500 font-medium">
+            {selectedCount} de {allAccountIds.length} conta{allAccountIds.length !== 1 ? 's' : ''} selecionada{selectedCount !== 1 ? 's' : ''}
+            {selectedCount > 0 && <span className="text-slate-600"> · ~{totalAds.toLocaleString('pt-BR')} anúncios</span>}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={selectAll}   className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">Todas</button>
+            <span className="text-slate-700">·</span>
+            <button onClick={deselectAll} className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">Nenhuma</button>
+          </div>
+        </div>
+
+        {/* Accounts grouped by token */}
+        {tokens.map(t => (
+          <div key={t.id}>
+            {/* Token label */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-900/20 border-b border-slate-800/60">
+              <MetaIcon size={11} className="text-blue-400/60 shrink-0" />
+              <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+                {t.label}{t.fb_user_name ? ` — ${t.fb_user_name}` : ''}
+              </span>
+            </div>
+
+            {t.ad_accounts.length === 0 ? (
+              <div className="px-4 py-3 text-xs text-slate-600 italic">Nenhuma conta sincronizada</div>
+            ) : (
+              t.ad_accounts.map(acc => {
+                const checked = selected.has(acc.account_id)
+                return (
+                  <div
+                    key={acc.id}
+                    onClick={() => toggle(acc.account_id)}
+                    className={clsx(
+                      'flex items-center gap-3 px-4 py-3 border-b border-slate-800/40 last:border-0 cursor-pointer transition-colors hover:bg-slate-800/30',
+                      !checked && 'opacity-50',
+                    )}
+                  >
+                    {/* Checkbox */}
+                    <div className={clsx(
+                      'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                      checked ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800',
+                    )}>
+                      {checked && <Check size={9} className="text-white" />}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-200 truncate">{acc.account_name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={clsx(
+                          'text-[9px] font-bold px-1.5 py-0.5 rounded border',
+                          acc.is_active
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                            : 'bg-slate-700/50 text-slate-500 border-slate-700',
+                        )}>
+                          {acc.status_label ?? 'Desconhecida'}
+                        </span>
+                        {acc.currency && <span className="text-[10px] text-slate-600">{acc.currency}</span>}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-slate-300 tabular-nums">{acc.ad_count.toLocaleString('pt-BR')}</p>
+                      <p className="text-[9px] text-slate-600">anúncios</p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Period + fetch */}
+      <div className="card p-4 space-y-3">
+        <div>
+          <label className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
+            <Calendar size={11} />
+            Período
+          </label>
+          <select
+            value={datePreset}
+            onChange={e => setDatePreset(e.target.value)}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500/60 cursor-pointer"
+          >
+            {DATE_PRESETS.map(p => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {fetchError && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
+            <AlertCircle size={13} className="shrink-0 mt-0.5" />
+            <span>{fetchError}</span>
+          </div>
+        )}
+
+        <button
+          onClick={handleFetch}
+          disabled={selectedCount === 0 || fetching}
+          className={clsx(
+            'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all',
+            selectedCount > 0 && !fetching
+              ? 'bg-blue-600 hover:bg-blue-500 text-white'
+              : 'bg-slate-700 text-slate-500 cursor-not-allowed',
+          )}
+        >
+          {fetching ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Buscando anúncios…
+            </>
+          ) : (
+            <>
+              <MetaIcon size={14} />
+              Buscar anúncios {selectedCount > 0 ? `(${selectedCount} conta${selectedCount !== 1 ? 's' : ''})` : ''}
+            </>
+          )}
+        </button>
+
+        <p className="text-[10px] text-slate-700 text-center">
+          Gerenciar contas em{' '}
+          <a href="/settings" className="text-slate-600 underline hover:text-slate-400">Configurações</a>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
-type PageState = 'idle' | 'analyzed'
+type PageState = 'idle' | 'selectAccounts' | 'selectAds' | 'analyzed'
 type AIStatus = 'idle' | 'loading' | 'done' | 'error'
+type IdleTab  = 'excel' | 'facebook'
 
 export default function AnaliseCriativosPage() {
   const [state, setState] = useState<PageState>('idle')
+  const [idleTab, setIdleTab] = useState<IdleTab>('facebook')
+  // Facebook ads step
+  const [fbAccounts,  setFbAccounts]  = useState<FBAccountWithRows[]>([])
+  const [fbDateLabel, setFbDateLabel] = useState('')
   const [adCount, setAdCount] = useState(0)
   const [fileName, setFileName] = useState('')
   const [analysis, setAnalysis] = useState<FullAnalysis | null>(null)
@@ -1367,6 +2249,34 @@ export default function AnaliseCriativosPage() {
       combinations.forteHookTopBody.length +
       combinations.forteHookForteBody.length
     : 0
+
+  // -------------------------------------------------------------------------
+  // Common: process parsed AdRow[] into analysis state
+  // -------------------------------------------------------------------------
+
+  function processRows(parsed: AdRow[], sourceLabel: string) {
+    const result   = runFullAnalysis(parsed)
+    const combos   = generateCombinations(result.hookRetention, result.bodyConversion)
+
+    setAnalysis(result)
+    setCombinations(combos)
+    setAdScores(buildAdScoreTable(parsed, result))
+    setCtaRec(getCtaRecommendation(parsed))
+    setPrioritized(prioritizeCombinations(combos, result))
+    setAdCount(parsed.length)
+    setFileName(sourceLabel)
+    setState('analyzed')
+  }
+
+  // -------------------------------------------------------------------------
+  // Facebook handler — go to ad selection
+  // -------------------------------------------------------------------------
+
+  function handleFacebookNext(accountsWithRows: FBAccountWithRows[], dateLabel: string) {
+    setFbAccounts(accountsWithRows)
+    setFbDateLabel(dateLabel)
+    setState('selectAds')
+  }
 
   // -------------------------------------------------------------------------
   // File parsing
@@ -1422,17 +2332,7 @@ export default function AnaliseCriativosPage() {
         return
       }
 
-      const result = runFullAnalysis(parsed)
-      const combos = generateCombinations(result.hookRetention, result.bodyConversion)
-
-      setAnalysis(result)
-      setCombinations(combos)
-      setAdScores(buildAdScoreTable(parsed, result))
-      setCtaRec(getCtaRecommendation(parsed))
-      setPrioritized(prioritizeCombinations(combos, result))
-      setAdCount(parsed.length)
-      setFileName(file.name)
-      setState('analyzed')
+      processRows(parsed, file.name)
     } catch (e) {
       console.error(e)
       setError('Erro ao processar o arquivo. Verifique o formato.')
@@ -1456,6 +2356,9 @@ export default function AnaliseCriativosPage() {
 
   const reset = () => {
     setState('idle')
+
+    setFbAccounts([])
+    setFbDateLabel('')
     setAnalysis(null)
     setCombinations(null)
     setAdScores(null)
@@ -1564,6 +2467,20 @@ export default function AnaliseCriativosPage() {
   // Render
   // -------------------------------------------------------------------------
 
+  // Ad picker takes over the full layout
+  if (state === 'selectAds') {
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        <AdSelector
+          accounts={fbAccounts}
+          dateLabel={fbDateLabel}
+          onAnalyze={(rows, label) => processRows(rows, label)}
+          onBack={() => setState('idle')}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 overflow-y-auto">
 
@@ -1616,79 +2533,100 @@ export default function AnaliseCriativosPage() {
       <div className="p-4 sm:p-6 space-y-5 max-w-6xl mx-auto">
 
         {/* ------------------------------------------------------------------ */}
-        {/* IDLE — Upload                                                        */}
+        {/* IDLE — Source selector                                               */}
         {/* ------------------------------------------------------------------ */}
         {state === 'idle' && (
           <div className="max-w-xl mx-auto space-y-4">
 
-            {/* Steps */}
-            <div className="card p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Como funciona</p>
-              <div className="space-y-3">
-                {[
-                  { n: '1', text: 'Exporte a planilha no padrão', highlight: 'Agente — Padrão para mandar dados' },
-                  { n: '2', text: 'Faça o upload do arquivo', highlight: '.xlsx abaixo' },
-                  { n: '3', text: 'Copie o resultado e cole no chat com seu agente de IA', highlight: null },
-                ].map(step => (
-                  <div key={step.n} className="flex items-start gap-3">
-                    <span className="w-5 h-5 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                      {step.n}
-                    </span>
-                    <p className="text-sm text-slate-400">
-                      {step.text}{' '}
-                      {step.highlight && <span className="text-slate-300 font-medium">{step.highlight}</span>}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Drop zone */}
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => inputRef.current?.click()}
-              className={clsx(
-                'flex flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all min-h-[200px] select-none',
-                dragOver
-                  ? 'border-purple-400 bg-purple-400/10 scale-[1.01]'
-                  : 'border-slate-700 bg-surface-hover hover:border-slate-500 hover:bg-slate-800/60',
-              )}
-            >
-              {loading ? (
-                <>
-                  <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center animate-pulse">
-                    <FileSpreadsheet size={22} className="text-purple-400" />
-                  </div>
-                  <p className="text-sm text-slate-400 font-medium">Processando…</p>
-                </>
-              ) : (
-                <>
-                  <div className={clsx(
-                    'w-14 h-14 rounded-2xl flex items-center justify-center transition-all',
-                    dragOver
-                      ? 'bg-purple-500/20 border-2 border-purple-500/40 scale-110'
-                      : 'bg-slate-800 border border-slate-600',
-                  )}>
-                    <FileSpreadsheet size={24} className={dragOver ? 'text-purple-400' : 'text-slate-400'} />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-slate-300">
-                      {dragOver ? 'Solte para analisar' : 'Arraste o arquivo aqui'}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">ou clique para selecionar · .xlsx / .xls</p>
-                  </div>
-                </>
-              )}
-              <input ref={inputRef} type="file" accept=".xlsx,.xls" onChange={handleChange} className="hidden" />
-            </div>
-
-            {error && (
-              <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                {error}
-              </div>
+            {/* ── Facebook: contas conectadas ──────────────────────────── */}
+            {idleTab === 'facebook' && (
+              <FacebookSection onNext={handleFacebookNext} />
             )}
+
+            {/* ── Excel (opção alternativa) ────────────────────────────── */}
+            {idleTab === 'excel' && (
+              <>
+                <div className="card p-5">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Como funciona</p>
+                  <div className="space-y-3">
+                    {[
+                      { n: '1', text: 'Exporte a planilha no padrão', highlight: 'Agente — Padrão para mandar dados' },
+                      { n: '2', text: 'Faça o upload do arquivo', highlight: '.xlsx abaixo' },
+                      { n: '3', text: 'Copie o resultado e cole no chat com seu agente de IA', highlight: null },
+                    ].map(step => (
+                      <div key={step.n} className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          {step.n}
+                        </span>
+                        <p className="text-sm text-slate-400">
+                          {step.text}{' '}
+                          {step.highlight && <span className="text-slate-300 font-medium">{step.highlight}</span>}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => inputRef.current?.click()}
+                  className={clsx(
+                    'flex flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all min-h-[200px] select-none',
+                    dragOver
+                      ? 'border-purple-400 bg-purple-400/10 scale-[1.01]'
+                      : 'border-slate-700 bg-surface-hover hover:border-slate-500 hover:bg-slate-800/60',
+                  )}
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center animate-pulse">
+                        <FileSpreadsheet size={22} className="text-purple-400" />
+                      </div>
+                      <p className="text-sm text-slate-400 font-medium">Processando…</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className={clsx(
+                        'w-14 h-14 rounded-2xl flex items-center justify-center transition-all',
+                        dragOver
+                          ? 'bg-purple-500/20 border-2 border-purple-500/40 scale-110'
+                          : 'bg-slate-800 border border-slate-600',
+                      )}>
+                        <FileSpreadsheet size={24} className={dragOver ? 'text-purple-400' : 'text-slate-400'} />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-slate-300">
+                          {dragOver ? 'Solte para analisar' : 'Arraste o arquivo aqui'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">ou clique para selecionar · .xlsx / .xls</p>
+                      </div>
+                    </>
+                  )}
+                  <input ref={inputRef} type="file" accept=".xlsx,.xls" onChange={handleChange} className="hidden" />
+                </div>
+
+                {error && (
+                  <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Toggle entre Facebook e Excel ───────────────────────── */}
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setIdleTab(idleTab === 'facebook' ? 'excel' : 'facebook')}
+                className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors flex items-center gap-1.5"
+              >
+                {idleTab === 'facebook'
+                  ? <><FileSpreadsheet size={11} /> Usar planilha Excel</>
+                  : <><MetaIcon size={11} /> Usar contas do Facebook</>
+                }
+              </button>
+            </div>
           </div>
         )}
 
@@ -1700,8 +2638,16 @@ export default function AnaliseCriativosPage() {
             {/* Summary strip */}
             <div className="flex flex-wrap items-center gap-3 p-3.5 rounded-xl bg-surface-card border border-surface-border">
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                  <FileSpreadsheet size={13} className="text-emerald-400" />
+                <div className={clsx(
+                  'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                  fileName.startsWith('Facebook')
+                    ? 'bg-blue-500/15 border border-blue-500/30'
+                    : 'bg-emerald-500/15 border border-emerald-500/30',
+                )}>
+                  {fileName.startsWith('Facebook')
+                    ? <MetaIcon size={13} className="text-blue-400" />
+                    : <FileSpreadsheet size={13} className="text-emerald-400" />
+                  }
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-slate-200 truncate">{fileName}</p>

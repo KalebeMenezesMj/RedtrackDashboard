@@ -50,7 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Conta',
     items: [
-      { icon: Settings,   label: 'Configurações', href: null, badge: 'soon' },
+      { icon: Settings,   label: 'Configurações', href: '/settings', accent: 'text-slate-400' },
       { icon: HelpCircle, label: 'Ajuda',          href: null, badge: 'soon' },
     ],
   },
