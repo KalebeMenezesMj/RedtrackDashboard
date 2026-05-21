@@ -14,7 +14,8 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f'{a[\\\\\"id\\\\\"]} | {a[\\\\\"name\\\\\"]} | status={a[\\\\\"account_status\\\\\"]} | {a[\\\\\"currency\\\\\"]}'\\) for a in d['data'][:5]]\")",
       "Bash(npx next *)",
       "Bash(dir)",
-      "Bash(dir data *)"
+      "Bash(dir data *)",
+      "Bash(node -e \"const E = require\\('exceljs'\\); const wb = new E.Workbook\\(\\); wb.addWorksheet\\('test'\\); console.log\\('ExcelJS OK, version:', require\\('exceljs/package.json'\\).version\\)\")"
     ]
   }
 }

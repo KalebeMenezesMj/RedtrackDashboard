@@ -81,15 +81,22 @@ function mapRows(fbRows: FBInsightRow[]): AdRow[] {
     if (plays === 0 || impressions === 0) continue
     const p25 = actionVal(row.video_p25_watched_actions, 'video_view')
     const p75 = actionVal(row.video_p75_watched_actions, 'video_view')
+    // Sum all purchase-type events (|| would incorrectly skip real zeros)
     const purchases =
-      actionVal(row.actions, 'purchase') ||
-      actionVal(row.actions, 'omni_purchase') ||
-      actionVal(row.actions, 'offsite_conversion.fb_pixel_purchase')
+      actionVal(row.actions, 'offsite_conversion.fb_pixel_purchase') +
+      actionVal(row.actions, 'purchase') +
+      actionVal(row.actions, 'omni_purchase') +
+      actionVal(row.actions, 'onsite_web_purchase') +
+      actionVal(row.actions, 'app_custom_event.fb_mobile_purchase')
+    // Fall back to outbound link clicks when no pixel purchase events exist
+    const bodyConvActions = purchases > 0
+      ? purchases
+      : (actionVal(row.actions, 'link_click') || actionVal(row.actions, 'outbound_click'))
     out.push({
       name,
       playRate:       plays / impressions,
       hookRetention:  p25 / plays,
-      bodyConversion: purchases / plays,
+      bodyConversion: bodyConvActions / plays,
       bodyRetention:  p75 / plays,
     })
   }

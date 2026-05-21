@@ -149,9 +149,12 @@ function MetricSection({ icon: Icon, iconColor, iconBg, title, subtitle, analysi
   return (
     <div className="card overflow-hidden flex flex-col">
       {/* Header */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover transition-colors text-left w-full"
+        onKeyDown={e => e.key === 'Enter' && setOpen(o => !o)}
+        className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover transition-colors text-left w-full cursor-pointer"
       >
         <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
           <Icon size={13} className={iconColor} />
@@ -182,7 +185,7 @@ function MetricSection({ icon: Icon, iconColor, iconBg, title, subtitle, analysi
           <CopyButton text={copyText} />
           {open ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
         </div>
-      </button>
+      </div>
 
       {/* Body */}
       {open && (
@@ -546,9 +549,12 @@ function Stage2Section({ items }: { items: PrioritizedCombination[] }) {
 
   return (
     <div className="card overflow-hidden">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-surface-hover transition-colors"
+        onKeyDown={e => e.key === 'Enter' && setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-surface-hover transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center shrink-0">
@@ -565,7 +571,7 @@ function Stage2Section({ items }: { items: PrioritizedCombination[] }) {
           <CopyButton text={clipText} label="Copiar" />
           {open ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
         </div>
-      </button>
+      </div>
 
       {open && (
         <div className="border-t border-surface-border">
@@ -1701,8 +1707,8 @@ interface AdSelectorProps {
 }
 
 function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps) {
-  // Set of "accountId::adName" → selected
-  const allKeys = accounts.flatMap(a => a.rows.map(r => `${a.id}::${r.name}`))
+  // Key format: "accountId::rowIndex" — index guarantees uniqueness even when ad names repeat
+  const allKeys = accounts.flatMap(a => a.rows.map((_, ri) => `${a.id}::${ri}`))
   const [selected, setSelected] = useState<Set<string>>(new Set(allKeys))
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -1718,7 +1724,7 @@ function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps)
   }
 
   function toggleAccount(accId: string, rows: AdRow[]) {
-    const keys = rows.map(r => `${accId}::${r.name}`)
+    const keys = rows.map((_, ri) => `${accId}::${ri}`)
     const allSelected = keys.every(k => selected.has(k))
     setSelected(prev => {
       const next = new Set(prev)
@@ -1741,12 +1747,12 @@ function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps)
   function handleAnalyze() {
     const rows: AdRow[] = []
     for (const acc of accounts) {
-      for (const row of acc.rows) {
-        if (selected.has(`${acc.id}::${row.name}`)) rows.push(row)
-      }
+      acc.rows.forEach((row, ri) => {
+        if (selected.has(`${acc.id}::${ri}`)) rows.push(row)
+      })
     }
     const scanned  = accounts.length
-    const withData = accounts.filter(a => a.rows.some(r => selected.has(`${a.id}::${r.name}`))).length
+    const withData = accounts.filter(a => a.rows.some((_, ri) => selected.has(`${a.id}::${ri}`))).length
     onAnalyze(rows, `Facebook · ${dateLabel} · ${withData}/${scanned} contas · ${rows.length} anúncios`)
   }
 
@@ -1798,7 +1804,7 @@ function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps)
       {/* Account list */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 max-w-5xl mx-auto w-full">
         {accounts.map(acc => {
-          const accKeys    = acc.rows.map(r => `${acc.id}::${r.name}`)
+          const accKeys    = acc.rows.map((_, ri) => `${acc.id}::${ri}`)
           const allSel     = accKeys.every(k => selected.has(k))
           const someSel    = accKeys.some(k => selected.has(k))
           const selCount   = accKeys.filter(k => selected.has(k)).length
@@ -1859,8 +1865,8 @@ function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps)
                     <span className="text-right">Body Ret.</span>
                   </div>
 
-                  {acc.rows.map(row => {
-                    const key     = `${acc.id}::${row.name}`
+                  {acc.rows.map((row, rowIdx) => {
+                    const key     = `${acc.id}::${rowIdx}`
                     const checked = selected.has(key)
                     return (
                       <div
@@ -2511,6 +2517,321 @@ export default function AnaliseCriativosPage() {
       setS4MultiplyStatus, setS4MultiplyContent, setS4MultiplyError)
   }
 
+  // -------------------------------------------------------------------------
+  // Export to Excel — styled, one sheet per section
+  // -------------------------------------------------------------------------
+
+  async function exportToExcel() {
+    if (!analysis || !adScores) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod = await import('exceljs')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ExcelJS = ((mod as any).default ?? mod) as any
+    const wb = new ExcelJS.Workbook()
+    wb.creator  = 'RedTrack Dashboard'
+    wb.created  = new Date()
+
+    // ── Palette (ARGB) ──────────────────────────────────────────────────────
+    const P = {
+      darkBg:       'FFFFFFFF',   // white
+      rowAlt:       'FFF8FAFC',   // slate-50
+      headerBg:     'FF1E293B',   // slate-800 — title bar só
+      sectionBg:    'FFF1F5F9',   // slate-100 — cabeçalho de colunas
+      border:       'FFD1D5DB',   // gray-300
+      headerText:   'FF1E293B',   // slate-800
+      bodyText:     'FF374151',   // gray-700
+      dimText:      'FF6B7280',   // gray-500
+      // TOP — âmbar (legível no branco)
+      topBg:        'FFFFFFFF',
+      topText:      'FFB45309',   // amber-700
+      topBorder:    'FFFCD34D',   // amber-300
+      topSecBg:     'FFFEF9C3',   // amber-100
+      // FORTES — verde
+      forteBg:      'FFFFFFFF',
+      forteText:    'FF047857',   // emerald-700
+      forteBorder:  'FF6EE7B7',   // emerald-300
+      forteSecBg:   'FFD1FAE5',   // emerald-100
+      // MÉDIOS — azul
+      medioBg:      'FFFFFFFF',
+      medioText:    'FF1D4ED8',   // blue-700
+      medioBorder:  'FF93C5FD',   // blue-300
+      medioSecBg:   'FFDBEAFE',   // blue-100
+      // Priority
+      altaBg:       'FFFFFFFF', altaText:    'FFB45309',
+      mediaPriBg:   'FFFFFFFF', mediaPriText:'FF047857',
+      baixaBg:      'FFFFFFFF', baixaText:   'FF6B7280',
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function side(argb: string, style = 'thin'): any {
+      return { style, color: { argb } }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function borders(argb = P.border, style = 'thin'): any {
+      const s = side(argb, style)
+      return { top: s, bottom: s, left: s, right: s }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function styleCell(cell: any, opts: {
+      bg?: string; text?: string; bold?: boolean; size?: number
+      align?: string; border?: string; borderStyle?: string; italic?: boolean
+    }) {
+      if (opts.bg)   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } }
+      cell.font      = { name: 'Calibri', size: opts.size ?? 10, bold: opts.bold ?? false, italic: opts.italic ?? false, color: { argb: opts.text ?? P.bodyText } }
+      cell.border    = borders(opts.border ?? P.border, opts.borderStyle ?? 'thin')
+      cell.alignment = { vertical: 'middle', horizontal: (opts.align ?? 'left') as string, wrapText: false }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function addTitle(ws: any, text: string, cols: number) {
+      ws.mergeCells(1, 1, 1, cols)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cell: any = ws.getCell(1, 1)
+      cell.value = text
+      cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: P.headerBg } }
+      cell.font  = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFF1F5F9' } }
+      cell.border = borders(P.border, 'medium')
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
+      ws.getRow(1).height = 30
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function addHeaders(ws: any, row: number, labels: string[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r: any = ws.getRow(row)
+      r.height = 22
+      labels.forEach((label, ci) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cell: any = r.getCell(ci + 1)
+        cell.value = label.toUpperCase()
+        cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: P.sectionBg } }
+        cell.font  = { name: 'Calibri', size: 9, bold: true, color: { argb: P.headerText } }
+        cell.border = borders(P.border)
+        cell.alignment = { vertical: 'middle', horizontal: ci === 0 ? 'left' : 'center', indent: ci === 0 ? 1 : 0 }
+      })
+    }
+
+    function tierPalette(tier: string) {
+      if (tier === 'TOP')    return { bg: P.topBg,    text: P.topText,    brd: P.topBorder,    sec: P.topSecBg   }
+      if (tier === 'FORTES' || tier === 'FORTE') return { bg: P.forteBg, text: P.forteText, brd: P.forteBorder, sec: P.forteSecBg }
+      if (tier === 'MÉDIOS' || tier === 'MÉDIO') return { bg: P.medioBg, text: P.medioText, brd: P.medioBorder, sec: P.medioSecBg }
+      return { bg: P.darkBg, text: P.bodyText, brd: P.border, sec: P.headerBg }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function autoWidth(ws: any, mins: number[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ws.columns.forEach((col: any, i: number) => {
+        let max = mins[i] ?? 10
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        col.eachCell?.({ includeEmpty: false }, (cell: any) => {
+          const len = String(cell.value ?? '').length
+          if (len + 4 > max) max = Math.min(len + 4, 70)
+        })
+        col.width = max
+      })
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Sheet 1 — Visão Geral
+    // ════════════════════════════════════════════════════════════════════════
+    {
+      const ws = wb.addWorksheet('Visão Geral')
+      ws.views = [{ showGridLines: false }]
+
+      addTitle(ws, '  VISÃO GERAL — Score por Anúncio', 6)
+      addHeaders(ws, 2, ['Anúncio', 'Play Rate', 'Hook Ret.', 'Body Ret.', 'Body Conv.', 'Score'])
+
+      adScores.forEach((r, idx) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row: any = ws.getRow(idx + 3)
+        row.height = 20
+        const bg   = idx % 2 === 0 ? P.darkBg : P.rowAlt
+        const scoreCol = r.score >= 10 ? P.topText : r.score >= 7 ? P.forteText : r.score >= 4 ? P.medioText : P.dimText
+
+        const vals = [r.name, r.playRateTier ?? '—', r.hookRetentionTier ?? '—', r.bodyRetentionTier ?? '—', r.bodyConversionTier ?? '—', r.score]
+        vals.forEach((v, ci) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cell: any = row.getCell(ci + 1)
+          cell.value = v
+          const isScore = ci === 5
+          const isTier  = ci > 0 && ci < 5
+          let text = P.bodyText
+          if (isScore) text = scoreCol
+          else if (isTier) {
+            const t = tierPalette(String(v))
+            text = t.text === P.bodyText ? P.dimText : t.text
+          }
+          styleCell(cell, { bg, text, bold: isScore, align: ci === 0 ? 'left' : 'center' })
+        })
+      })
+
+      autoWidth(ws, [48, 12, 12, 12, 12, 8])
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Sheets 2-5 — Metric sheets
+    // ════════════════════════════════════════════════════════════════════════
+    const metrics: [string, MetricAnalysis, string][] = [
+      ['Play Rate Hook', analysis.playRate,       '  PLAY RATE DO HOOK — Quebra ≥ 4×'],
+      ['Retenção Hook',  analysis.hookRetention,  '  RETENÇÃO DO HOOK — Quebra ≥ 6×'],
+      ['Retenção Body',  analysis.bodyRetention,  '  RETENÇÃO DO BODY — Faixas 30% / 40%'],
+      ['Conversão Body', analysis.bodyConversion, '  CONVERSÃO DO BODY — Quebra ≥ 3×'],
+    ]
+
+    for (const [name, metric, titleText] of metrics) {
+      const ws = wb.addWorksheet(name)
+      ws.views = [{ showGridLines: false }]
+      addTitle(ws, titleText, 4)
+      addHeaders(ws, 2, ['Classificação', '#', 'Nome do Anúncio', 'Valor (%)'])
+
+      let rank  = 1
+      let rowN  = 3
+      for (const tier of ['TOP', 'FORTES', 'MÉDIOS'] as const) {
+        const items = tier === 'TOP' ? metric.top : tier === 'FORTES' ? metric.fortes : metric.medios
+        if (items.length === 0) continue
+        const pal = tierPalette(tier)
+
+        // Tier section divider
+        ws.mergeCells(rowN, 1, rowN, 4)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sec: any = ws.getCell(rowN, 1)
+        sec.value = `${tier}  ·  ${items.length} anúncio${items.length !== 1 ? 's' : ''}`
+        sec.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: pal.sec } }
+        sec.font  = { name: 'Calibri', size: 10, bold: true, color: { argb: pal.text } }
+        sec.border = borders(pal.brd)
+        sec.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
+        ws.getRow(rowN).height = 20
+        rowN++
+
+        for (const item of items) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const row: any = ws.getRow(rowN)
+          row.height = 20
+          const vals = [tier, rank, item.name, parseFloat((item.value * 100).toFixed(2))]
+          vals.forEach((v, ci) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cell: any = row.getCell(ci + 1)
+            cell.value = v
+            if (ci === 3) cell.numFmt = '0.00'
+            styleCell(cell, { bg: pal.bg, text: pal.text, bold: ci === 0, align: ci === 0 || ci === 1 ? 'center' : ci === 3 ? 'center' : 'left', border: pal.brd })
+          })
+          rank++
+          rowN++
+        }
+      }
+
+      autoWidth(ws, [14, 6, 48, 12])
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Sheet 6 — Combinações Hook × Body
+    // ════════════════════════════════════════════════════════════════════════
+    if (combinations) {
+      const ws = wb.addWorksheet('Combinações')
+      ws.views = [{ showGridLines: false }]
+      addTitle(ws, '  COMBINAÇÕES HOOK × BODY', 4)
+      addHeaders(ws, 2, ['Tipo', '#', 'Hook', 'Body'])
+
+      const blocks = [
+        { label: 'TOP Hook + TOP Body',     combos: combinations.topHookTopBody,     hookPal: tierPalette('TOP'),    bodyPal: tierPalette('TOP')    },
+        { label: 'TOP Hook + FORTE Body',   combos: combinations.topHookForteBody,   hookPal: tierPalette('TOP'),    bodyPal: tierPalette('FORTES') },
+        { label: 'FORTE Hook + TOP Body',   combos: combinations.forteHookTopBody,   hookPal: tierPalette('FORTES'), bodyPal: tierPalette('TOP')    },
+        { label: 'FORTE Hook + FORTE Body', combos: combinations.forteHookForteBody, hookPal: tierPalette('FORTES'), bodyPal: tierPalette('FORTES') },
+      ].filter(b => b.combos.length > 0)
+
+      let rowN = 3
+      for (const block of blocks) {
+        // Block header
+        ws.mergeCells(rowN, 1, rowN, 4)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sec: any = ws.getCell(rowN, 1)
+        sec.value = `${block.label}  ·  ${block.combos.length} combo${block.combos.length !== 1 ? 's' : ''}`
+        sec.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: P.sectionBg } }
+        sec.font  = { name: 'Calibri', size: 10, bold: true, color: { argb: P.headerText } }
+        sec.border = borders(P.border)
+        sec.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
+        ws.getRow(rowN).height = 20
+        rowN++
+
+        block.combos.forEach((combo, i) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const row: any = ws.getRow(rowN)
+          row.height = 20
+          const bg = i % 2 === 0 ? P.darkBg : P.rowAlt
+
+          const cells = [
+            { val: block.label,  text: P.dimText,          },
+            { val: i + 1,        text: P.dimText,          },
+            { val: combo.hook,   text: block.hookPal.text, },
+            { val: combo.body,   text: block.bodyPal.text, },
+          ]
+          cells.forEach((c, ci) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cell: any = row.getCell(ci + 1)
+            cell.value = c.val
+            styleCell(cell, { bg, text: c.text, align: ci === 1 ? 'center' : 'left' })
+          })
+          rowN++
+        })
+      }
+
+      autoWidth(ws, [26, 6, 48, 48])
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Sheet 7 — Stage 2: Prioridade Cruzada
+    // ════════════════════════════════════════════════════════════════════════
+    if (prioritized && prioritized.length > 0) {
+      const ws = wb.addWorksheet('Stage 2 - Prioridade')
+      ws.views = [{ showGridLines: false }]
+      addTitle(ws, '  STAGE 2 — Prioridade Cruzada', 5)
+      addHeaders(ws, 2, ['#', 'Prioridade', 'Hook', 'Body', 'Score'])
+
+      prioritized.forEach((p, i) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row: any = ws.getRow(i + 3)
+        row.height = 20
+        const priPal =
+          p.priority === 'ALTA'  ? { bg: P.altaBg,      text: P.altaText      } :
+          p.priority === 'MÉDIA' ? { bg: P.mediaPriBg,  text: P.mediaPriText  } :
+                                   { bg: P.baixaBg,     text: P.baixaText     }
+        const scoreCol = p.score >= 10 ? P.topText : p.score >= 7 ? P.forteText : p.score >= 4 ? P.medioText : P.dimText
+
+        const rowBg = i % 2 === 0 ? P.darkBg : P.rowAlt
+        const cells = [
+          { val: i + 1,       bg: rowBg,  text: P.dimText,      align: 'center' },
+          { val: p.priority,  bg: rowBg,  text: priPal.text,    align: 'center' },
+          { val: p.hook,      bg: rowBg,  text: P.forteText,    align: 'left'   },
+          { val: p.body,      bg: rowBg,  text: P.topText,      align: 'left'   },
+          { val: p.score,     bg: rowBg,  text: scoreCol,       align: 'center' },
+        ]
+        cells.forEach((c, ci) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cell: any = row.getCell(ci + 1)
+          cell.value = c.val
+          styleCell(cell, { bg: c.bg, text: c.text, bold: ci === 1 || ci === 4, align: c.align })
+        })
+      })
+
+      autoWidth(ws, [6, 12, 48, 48, 8])
+    }
+
+    // ── Download ────────────────────────────────────────────────────────────
+    const buffer  = await wb.xlsx.writeBuffer()
+    const blob    = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url     = URL.createObjectURL(blob)
+    const link    = document.createElement('a')
+    const dateStr = new Date().toISOString().slice(0, 10)
+    link.href     = url
+    link.download = `analise-criativos-${dateStr}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const clipboardAll = analysis ? formatAnalysisForClipboard(analysis) : ''
   const clipboardCombos = combinations ? formatCombinationsForClipboard(combinations) : ''
 
@@ -2567,7 +2888,13 @@ export default function AnaliseCriativosPage() {
           <div className="flex items-center gap-2 shrink-0">
             {state === 'analyzed' && (
               <>
-                <CopyButton text={clipboardAll} label="Copiar análise" />
+                <button
+                  onClick={exportToExcel}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-700/60 bg-emerald-500/8 text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/60 hover:bg-emerald-500/15 text-xs font-medium transition-all"
+                >
+                  <FileSpreadsheet size={12} />
+                  <span className="hidden sm:inline">Exportar Excel</span>
+                </button>
                 <button
                   onClick={reset}
                   className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-all"
