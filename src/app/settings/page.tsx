@@ -140,7 +140,7 @@ function TokenCard({ token: t, onUpdate }: {
   token: FBToken
   onUpdate: (tokenId: string, accountId: string, enabled: boolean) => void
 }) {
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
 
   const enabledCount = t.ad_accounts.filter(a => a.enabled).length
   const totalCount   = t.ad_accounts.length

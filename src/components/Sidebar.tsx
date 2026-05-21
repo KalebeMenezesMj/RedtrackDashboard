@@ -225,23 +225,8 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         ))}
       </nav>
 
-      {/* ── Tip card ──────────────────────────────────────────────────────── */}
-      {/* Simple surface-raised card — no gradient, no glow blob, no ::after */}
-      <div className="px-3 pb-3">
-        <div className="rounded-xl p-3.5 bg-surface-raised border border-surface-border">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles size={11} className="text-brand-400 shrink-0" />
-            <p className="text-[11px] font-semibold text-slate-300">Pro Tip</p>
-          </div>
-          <p className="text-[11px] text-slate-500 leading-snug">
-            Use o período de{' '}
-            <span className="text-slate-400 font-medium">30 dias</span>{' '}
-            para métricas mais estáveis.
-          </p>
-        </div>
-      </div>
 
-      {/* ── Footer ────────────────────────────────────────────────────────── */}
+{/* ── Footer ────────────────────────────────────────────────────────── */}
       <div className="px-4 pb-5">
         <div className="divider mb-3.5" />
         <div className="flex items-center justify-between px-1">
