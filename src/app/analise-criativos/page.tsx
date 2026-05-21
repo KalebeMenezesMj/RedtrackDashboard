@@ -1906,6 +1906,102 @@ function AdSelector({ accounts, dateLabel, onAnalyze, onBack }: AdSelectorProps)
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// TokenGroup — collapsible group of ad accounts per token
+// ---------------------------------------------------------------------------
+
+function TokenGroup({
+  token: t, selected, onToggle, selCount,
+}: {
+  token: ConnectedToken
+  selected: Set<string>
+  onToggle: (id: string) => void
+  selCount: number
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="border-b border-slate-800/60 last:border-0">
+      {/* Header — always visible, click to expand */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors text-left"
+      >
+        <MetaIcon size={12} className="text-blue-400/70 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-slate-300 truncate">
+            {t.label}{t.fb_user_name ? ` — ${t.fb_user_name}` : ''}
+          </p>
+          <p className="text-[10px] text-slate-600 mt-0.5">
+            {t.ad_accounts.length} conta{t.ad_accounts.length !== 1 ? 's' : ''}
+            {selCount > 0 && <span className="text-blue-400/80"> · {selCount} selecionada{selCount !== 1 ? 's' : ''}</span>}
+          </p>
+        </div>
+        {open
+          ? <ChevronUp size={13} className="text-slate-600 shrink-0" />
+          : <ChevronDown size={13} className="text-slate-600 shrink-0" />
+        }
+      </button>
+
+      {/* Expandable account list */}
+      {open && (
+        <div className="border-t border-slate-800/40">
+          {t.ad_accounts.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-slate-600 italic">Nenhuma conta sincronizada</div>
+          ) : (
+            t.ad_accounts.map(acc => {
+              const checked = selected.has(acc.account_id)
+              return (
+                <div
+                  key={acc.id}
+                  onClick={() => onToggle(acc.account_id)}
+                  className={clsx(
+                    'flex items-center gap-3 px-4 py-3 border-b border-slate-800/30 last:border-0 cursor-pointer transition-colors hover:bg-slate-800/30',
+                    !checked && 'opacity-50',
+                  )}
+                >
+                  <div className={clsx(
+                    'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                    checked ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800',
+                  )}>
+                    {checked && <Check size={9} className="text-white" />}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-200 truncate">{acc.account_name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={clsx(
+                        'text-[9px] font-bold px-1.5 py-0.5 rounded border',
+                        acc.is_active
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                          : 'bg-slate-700/50 text-slate-500 border-slate-700',
+                      )}>
+                        {acc.status_label ?? 'Desconhecida'}
+                      </span>
+                      {acc.currency && <span className="text-[10px] text-slate-600">{acc.currency}</span>}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className={clsx(
+                      'text-sm font-bold tabular-nums',
+                      acc.ad_count === 0 ? 'text-slate-600' : 'text-slate-300',
+                    )}>
+                      {acc.ad_count.toLocaleString('pt-BR')}
+                    </p>
+                    <p className="text-[9px] text-slate-600">anúncios</p>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // FacebookSection — lista contas conectadas + seleção + busca de insights
 // ---------------------------------------------------------------------------
 
@@ -2076,64 +2172,19 @@ function FacebookSection({ onNext }: FacebookSectionProps) {
           </div>
         </div>
 
-        {/* Accounts grouped by token */}
-        {tokens.map(t => (
-          <div key={t.id}>
-            {/* Token label */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-900/20 border-b border-slate-800/60">
-              <MetaIcon size={11} className="text-blue-400/60 shrink-0" />
-              <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
-                {t.label}{t.fb_user_name ? ` — ${t.fb_user_name}` : ''}
-              </span>
-            </div>
-
-            {t.ad_accounts.length === 0 ? (
-              <div className="px-4 py-3 text-xs text-slate-600 italic">Nenhuma conta sincronizada</div>
-            ) : (
-              t.ad_accounts.map(acc => {
-                const checked = selected.has(acc.account_id)
-                return (
-                  <div
-                    key={acc.id}
-                    onClick={() => toggle(acc.account_id)}
-                    className={clsx(
-                      'flex items-center gap-3 px-4 py-3 border-b border-slate-800/40 last:border-0 cursor-pointer transition-colors hover:bg-slate-800/30',
-                      !checked && 'opacity-50',
-                    )}
-                  >
-                    {/* Checkbox */}
-                    <div className={clsx(
-                      'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
-                      checked ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800',
-                    )}>
-                      {checked && <Check size={9} className="text-white" />}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-slate-200 truncate">{acc.account_name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={clsx(
-                          'text-[9px] font-bold px-1.5 py-0.5 rounded border',
-                          acc.is_active
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-                            : 'bg-slate-700/50 text-slate-500 border-slate-700',
-                        )}>
-                          {acc.status_label ?? 'Desconhecida'}
-                        </span>
-                        {acc.currency && <span className="text-[10px] text-slate-600">{acc.currency}</span>}
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-slate-300 tabular-nums">{acc.ad_count.toLocaleString('pt-BR')}</p>
-                      <p className="text-[9px] text-slate-600">anúncios</p>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        ))}
+        {/* Accounts grouped by token — collapsed by default */}
+        {tokens.map(t => {
+          const selCount = t.ad_accounts.filter(a => selected.has(a.account_id)).length
+          return (
+            <TokenGroup
+              key={t.id}
+              token={t}
+              selected={selected}
+              onToggle={toggle}
+              selCount={selCount}
+            />
+          )
+        })}
       </div>
 
       {/* Period + fetch */}
